@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parse Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Saira+Semi+Condensed:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --text:#f5f7ff;
+  --dim:#c3cdee;
+  --faint:#8592c4;
+  --gold:#ffd970;
+  --good:#7dffa1;
+  --bad:#ff8090;
+  --silver:linear-gradient(180deg,#ffffff 0%,#d4dbea 22%,#8c96b0 50%,#e6ebf6 74%,#9ca5be 100%);
+  --goldline:linear-gradient(180deg,#fff6d0 0%,#f1cf6a 30%,#a37b22 55%,#f7e08f 78%,#b8902e 100%);
+  --win-bg:linear-gradient(180deg,#3159c9 0%,#1c3a98 42%,#10246a 78%,#0b1a50 100%);
+  --win-bg-hi:linear-gradient(180deg,#4f78e6 0%,#2c4fb8 50%,#1a3485 100%);
+  --rowh:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  color:var(--text);
+  background:
+    radial-gradient(1300px 700px at 50% -15%,#173184 0%,transparent 60%),
+    radial-gradient(900px 600px at 100% 110%,#0f1f63 0%,transparent 60%),
+    linear-gradient(180deg,#071443 0%,#040b2c 55%,#02061a 100%);
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-feature-settings:'tnum' 1,'cv11' 1;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+  text-shadow:0 1px 0 rgba(0,0,10,.85),0 0 6px rgba(0,0,30,.55);
+}
+body::before{ /* faint crystal glow */
+  content:'';position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(600px 300px at 50% 0%,rgba(140,190,255,.10),transparent 70%);
+}
+
+/* ---- the FF window ---- */
+.stat,.tabs,.card,.chip.on,.dwin{
+  background:var(--win-bg) padding-box, var(--silver) border-box;
+  border:2px solid transparent;
+  border-radius:9px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,25,.7),
+    inset 0 2px 0 1px rgba(255,255,255,.10),
+    0 4px 14px rgba(0,0,0,.5);
+}
+
+.app{position:relative;z-index:1;height:100%;max-width:1500px;margin:0 auto;padding:28px 32px 18px;display:flex;flex-direction:column;gap:20px}
+
+/* header */
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.meta{display:flex;align-items:center;gap:10px;font-family:Cinzel,serif;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.meta .sep{color:var(--faint)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.dot.live{background:var(--good);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(125,255,161,.6)}70%{box-shadow:0 0 0 9px rgba(125,255,161,0)}100%{box-shadow:0 0 0 0 rgba(125,255,161,0)}}
+h1{font-family:Cinzel,serif;font-size:34px;font-weight:700;letter-spacing:.02em;line-height:1.15;margin-top:6px;max-width:46vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:linear-gradient(180deg,#ffffff 0%,#dfe6f7 45%,#9aa6c6 60%,#eef2fb 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 0 rgba(0,0,15,.9));text-shadow:none}
+.stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{padding:10px 18px 12px;min-width:132px}
+.stat label{display:block;font-family:Cinzel,serif;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.stat b{display:block;font-size:24px;font-weight:700;letter-spacing:-.01em;margin-top:4px}
+.stat.hero{background:var(--win-bg) padding-box, var(--goldline) border-box}
+.stat.hero label{color:#f3dc9a}
+.stat.hero b{color:var(--gold)}
+
+/* toolbar */
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.tabs{display:inline-flex;padding:4px;gap:2px;flex:none}
+.tabs button{all:unset;cursor:pointer;padding:7px 18px;border-radius:6px;font-family:Cinzel,serif;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--dim);transition:background .2s,color .2s}
+.tabs button:hover{color:#fff}
+.tabs button.on{background:var(--win-bg-hi);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),inset 0 0 0 2px rgba(0,0,30,.5)}
+.hist{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;justify-content:flex-end;min-width:0;padding:2px}
+.hist::-webkit-scrollbar{display:none}
+.chip{all:unset;cursor:pointer;flex:none;display:flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--dim);border:2px solid rgba(200,210,235,.25);background:rgba(10,25,80,.5);transition:.2s;max-width:240px}
+.chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip em{font-style:normal;font-weight:500;color:var(--faint);font-size:11.5px}
+.chip:hover{color:#fff;border-color:rgba(220,228,245,.5)}
+.chip.on{color:#fff}
+.chip.on em{color:var(--dim)}
+
+/* board */
+.board{position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#3a4f94 transparent;padding:2px}
+.rows{position:relative}
+.row{
+  --skew:-14deg;
+  position:absolute;left:0;right:0;top:0;height:var(--rowh);
+  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:1fr auto auto;column-gap:18px;
+  padding:0 34px 0 30px;
+  font-family:"Saira Semi Condensed",Inter,sans-serif;
+  transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity .3s,height .3s;
+  animation:enter .45s ease both;
+}
+@keyframes enter{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:none}}
+.row>*{position:relative;z-index:2}
+
+/* the slanted translucent panel */
+.row>.plate{
+  position:absolute;z-index:0;inset:9px 10px 0 12px;transform:skewX(var(--skew));
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.07) 0%,transparent 40%),
+    linear-gradient(180deg,rgba(38,66,148,.62) 0%,rgba(14,28,82,.80) 60%,rgba(8,16,52,.88) 100%);
+  border:1.5px solid rgba(170,200,245,.85);
+  box-shadow:inset 0 0 0 1px rgba(0,0,30,.55),inset 0 0 22px rgba(90,140,235,.22),0 4px 12px rgba(0,0,0,.55);
+}
+.row.me>.plate{border-color:#f1cf6a;box-shadow:inset 0 0 0 1px rgba(0,0,30,.55),inset 0 0 22px rgba(240,200,100,.15),0 0 14px rgba(241,207,106,.25),0 4px 12px rgba(0,0,0,.55)}
+
+/* name tab overlapping the top-left corner */
+.row>.tab{
+  position:absolute;z-index:3;left:4px;top:0;height:26px;max-width:62%;
+  display:flex;align-items:center;gap:8px;padding:0 30px 0 14px;
+  font-size:17px;font-weight:600;letter-spacing:.01em;white-space:nowrap;color:#fff;
+}
+.tab::before{
+  content:'';position:absolute;inset:0;z-index:-1;transform:skewX(var(--skew));
+  background:linear-gradient(90deg,rgba(128,172,240,.95) 0%,rgba(66,108,200,.9) 45%,rgba(40,72,165,.55) 80%,rgba(40,72,165,0) 100%);
+  border-top:1.5px solid rgba(215,232,255,.95);border-left:1.5px solid rgba(215,232,255,.95);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35);
+}
+.tab .n{overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 0 rgba(0,0,30,.9),0 0 6px rgba(0,0,40,.6)}
+.rank{font-size:12px;font-weight:700;color:rgba(225,236,255,.75);min-width:12px;text-align:center}
+.job{height:18px;padding:0 6px;border-radius:3px;display:grid;place-items:center;font-family:Inter,sans-serif;font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  color:color-mix(in srgb,var(--jc) 65%,#fff);background:rgba(3,10,40,.7);border:1px solid rgba(215,230,255,.5);text-shadow:none}
+.you{flex:none;font-family:Inter,sans-serif;font-size:9px;font-weight:800;letter-spacing:.12em;padding:2px 5px;border-radius:3px;color:#2a1d00;text-shadow:none;background:linear-gradient(180deg,#fff2c2,#e9c25a);display:none}
+.row.me .you{display:inline-block}
+
+/* big value / percent readout */
+.readout{grid-column:2;grid-row:1;align-self:end;display:flex;align-items:baseline;gap:8px;line-height:1}
+.lbl{font-size:13px;font-weight:600;letter-spacing:.06em;color:#8fd2ff;text-transform:uppercase}
+.num{font-size:30px;font-weight:500;letter-spacing:.01em;line-height:1;color:#fff}
+.pct{font-size:16px;font-weight:500;color:#dfe8ff;margin-left:-4px}
+
+/* thin slanted bar */
+.track{
+  grid-column:1/-1;grid-row:2;height:11px;margin-top:5px;transform:skewX(var(--skew));overflow:hidden;
+  background:linear-gradient(180deg,rgba(0,0,12,.9),rgba(22,32,64,.85));
+  border:1px solid rgba(150,182,228,.5);box-shadow:0 0 0 1px rgba(0,0,20,.5);
+}
+.fill{
+  position:absolute;left:0;top:0;bottom:0;width:0;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--jc) 35%,#fff) 0%,var(--jc) 55%,color-mix(in srgb,var(--jc) 65%,#000) 100%);
+  box-shadow:0 0 12px var(--jc);
+  transition:width .7s cubic-bezier(.2,.8,.2,1);
+}
+.fill::after{content:'';position:absolute;right:0;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 6px #fff}
+
+/* secondary stats, like the ATB / Limit labels */
+.sub{grid-column:1/-1;grid-row:3;display:flex;gap:16px;margin:3px 0 7px 2px;font-size:13px;font-weight:500;letter-spacing:.02em;color:#8fd2ff;white-space:nowrap;overflow:hidden}
+.sub span{flex:none}
+.sub .death{color:var(--bad);font-weight:700}
+.sub .mx{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;color:#b9dcff}
+
+.rows.tight .sub{display:none}
+.rows.tight .track{margin-bottom:6px;height:8px}
+.rows.tight .num{font-size:21px}
+.rows.tight .pct{font-size:12px}
+.rows.tight .lbl{display:none}
+.rows.tight>.row>.tab{height:20px;font-size:14px}
+.rows.tight>.row>.plate{top:7px}
+
+/* clickable plates */
+.row{cursor:pointer}
+.row:hover>.plate{border-color:#fff;box-shadow:inset 0 0 0 1px rgba(0,0,30,.55),inset 0 0 26px rgba(120,170,255,.35),0 0 16px rgba(150,190,255,.35),0 4px 12px rgba(0,0,0,.55)}
+
+/* skill breakdown window */
+.detail{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(0,4,22,.62);backdrop-filter:blur(3px);animation:fade .2s ease}
+.detail[hidden]{display:none}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.dwin{width:min(1040px,94vw);max-height:86vh;display:flex;flex-direction:column;padding:20px 24px 16px;gap:14px;animation:pop .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+.dhead{display:flex;align-items:center;gap:14px}
+.dhead .job{height:30px;font-size:11px;padding:0 9px}
+.dname{font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:24px;font-weight:600;line-height:1.1}
+.dmeta{font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:14px;color:#8fd2ff;margin-top:2px}
+.dx{all:unset;cursor:pointer;margin-left:8px;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;font-size:16px;color:var(--dim);border:1px solid rgba(220,228,245,.35);background:rgba(5,15,55,.5)}
+.dx:hover{color:#fff;border-color:#fff}
+.dtabs{align-self:flex-start}
+.dbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.xiva{margin-left:auto;display:flex;align-items:center;gap:12px;font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:13px;color:var(--dim)}
+.xiva b{color:#fff;font-weight:600}
+.xiva a{color:#8fd2ff}
+.fbtn{all:unset;cursor:pointer;padding:7px 16px;border-radius:7px;font-family:Cinzel,serif;font-size:12.5px;font-weight:700;letter-spacing:.05em;color:#fff;
+  background:var(--win-bg-hi) padding-box,var(--silver) border-box;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,25,.6);transition:filter .2s}
+.fbtn:hover{filter:brightness(1.15)}
+.fbtn.ghost{background:rgba(5,15,55,.6);border:2px solid rgba(220,228,245,.35)}
+.xivaform{display:flex;gap:8px;align-items:center}
+.xivaform[hidden]{display:none}
+.xivaform input{flex:1;min-width:0;font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:14px;color:#fff;padding:8px 12px;border-radius:6px;border:1px solid rgba(220,228,245,.5);background:rgba(2,8,35,.7);outline:none}
+.xivaform input:focus{border-color:#fff;box-shadow:0 0 0 2px rgba(143,210,255,.3)}
+.dcmp{appearance:none;-webkit-appearance:none;cursor:pointer;margin-left:auto;font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:14px;font-weight:500;color:#fff;
+  padding:6px 32px 6px 12px;border-radius:6px;border:1px solid rgba(220,228,245,.45);
+  background:rgba(5,15,55,.6) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c3cdee'/%3E%3C/svg%3E") no-repeat right 11px center}
+.dcmp:hover{border-color:#fff}
+.dcmp option{background:#0d1f5c;color:#fff}
+.vs{display:grid;grid-template-columns:96px minmax(0,1fr) 110px minmax(0,1fr) 96px;align-items:center;column-gap:12px;row-gap:7px;font-family:"Saira Semi Condensed",Inter,sans-serif;padding:4px 10px 14px;margin-bottom:6px;border-bottom:1px solid rgba(170,200,245,.3)}
+.vs .who{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:600;min-width:0}
+.vs .who.r{justify-content:flex-end;grid-column:4 / 6}
+.vs .who.l{grid-column:1 / 3}
+.vs .who .job{height:22px;font-size:10px;padding:0 6px}
+.vs .who span.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vs .vsx{text-align:center;font-family:Cinzel,serif;font-weight:700;font-size:15px;color:#f3dc9a}
+.vs .v{font-size:16px;white-space:nowrap}
+.vs .v.l{text-align:right}
+.vs .k{text-align:center;font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8fd2ff}
+.vs .best{color:#9dffb8;font-weight:600}
+.vbar{height:8px;transform:skewX(-14deg);background:rgba(0,0,15,.7);border:1px solid rgba(150,182,228,.35);overflow:hidden;display:flex}
+.vbar.l{justify-content:flex-end}
+.vbar i{display:block;height:100%;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 35%,#fff),var(--c));box-shadow:0 0 8px var(--c)}
+.abar.two{height:8px;display:flex;flex-direction:column}
+.abar.two i{height:50%;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 35%,#fff),var(--c));box-shadow:none}
+.up{color:#9dffb8}.down{color:#ff9aa6}
+.dpair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.dpair h4{font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:14px;font-weight:600;padding:4px 10px 6px;color:#fff}
+.dtable{overflow-y:auto;min-height:0;font-family:"Saira Semi Condensed",Inter,sans-serif;scrollbar-width:thin;scrollbar-color:#3a4f94 transparent}
+.drow{display:grid;align-items:center;column-gap:10px;padding:7px 10px;border-bottom:1px solid rgba(170,200,245,.12)}
+.drow.hd{position:sticky;top:0;z-index:1;background:#13286f;font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8fd2ff;border-bottom:1px solid rgba(170,200,245,.4)}
+.drow>span{text-align:right;font-size:15px;white-space:nowrap}
+.drow>span.a{text-align:left;min-width:0}
+.drow.hd>span{font-size:11.5px}
+.drow:not(.hd):hover{background:rgba(120,160,255,.08)}
+.aname{font-size:15.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.abar{height:5px;margin-top:4px;transform:skewX(-14deg);background:rgba(0,0,15,.7);border:1px solid rgba(150,182,228,.35);overflow:hidden}
+.abar i{display:block;height:100%;background:linear-gradient(180deg,color-mix(in srgb,var(--jc) 35%,#fff),var(--jc));box-shadow:0 0 8px var(--jc)}
+.dempty{padding:28px 10px;text-align:center;color:var(--dim);font-size:14px}
+.dnote{font-size:11.5px;color:var(--faint)}
+
+/* empty state */
+.empty-state{position:absolute;inset:0;display:none;place-items:center}
+body.empty .empty-state{display:grid}
+.card{width:min(440px,92%);text-align:center;padding:32px 30px}
+.ring{width:40px;height:40px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.card h2{font-family:Cinzel,serif;font-size:20px;font-weight:700;letter-spacing:.04em}
+.card p{color:var(--dim);font-size:13.5px;line-height:1.55;margin-top:8px}
+.card code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:#fff;background:rgba(0,0,30,.45);padding:2px 6px;border-radius:4px;text-shadow:none}
+.card button{all:unset;cursor:pointer;margin-top:18px;padding:9px 20px;border-radius:7px;font-family:Cinzel,serif;font-size:13px;font-weight:700;letter-spacing:.05em;
+  background:var(--win-bg-hi) padding-box,var(--silver) border-box;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,25,.6);transition:filter .2s}
+.card button:hover{filter:brightness(1.15)}
+
+/* log folder control */
+.logctl{display:flex;align-items:center;gap:10px;min-width:0;flex:1;justify-content:center}
+.fbtn.small{padding:4px 11px;font-size:11px;border-width:1.5px}
+.logstate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px;color:var(--dim)}
+.logstate.bad{color:var(--bad)}
+.logstate.wait{color:#ffd166}
+.card button + button{margin-left:8px}
+
+/* damage graph */
+.tleft{display:flex;align-items:center;gap:12px;flex:none}
+.graph{z-index:30}
+.gwin{width:min(1260px,96vw)}
+.gwin #gModes{margin-left:auto}
+.gwin .dx{margin-left:10px}
+.gbox{position:relative;min-height:300px;font-family:"Saira Semi Condensed",Inter,sans-serif;background:rgba(2,8,35,.45);border:1px solid rgba(170,200,245,.25);border-radius:6px;overflow:hidden}
+.gsvg{display:block}
+.gsvg text{fill:var(--dim);font-size:12px;text-shadow:none}
+.ggrid{stroke:rgba(255,255,255,.08)}
+.gaxis{stroke:rgba(255,255,255,.25)}
+.gy{text-anchor:end}
+.gx{text-anchor:middle}
+.gband.raid{fill:rgba(255,196,64,.13)}
+.gband.self{fill:rgba(110,200,255,.12)}
+.gedge{stroke-width:1;stroke-dasharray:4 3}
+.gedge.raid{stroke:rgba(255,214,102,.75)}
+.gedge.self{stroke:rgba(150,215,255,.75)}
+.glane.raid rect{fill:rgba(190,140,30,.85);stroke:rgba(255,226,150,.9)}
+.glane.self rect{fill:rgba(40,120,200,.85);stroke:rgba(170,220,255,.9)}
+.gsvg .glane text{fill:#fff;font-size:10.5px;font-weight:600}
+.gline{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;transition:opacity .15s,stroke-width .15s}
+.gsvg.focus .gline:not(.on),.gsvg.focus .glab:not(.on){opacity:.15}
+.gsvg.focus .gline.on{stroke-width:3}
+.gsvg .glab text{fill:#fff;font-size:12.5px}
+.gcross{stroke:rgba(255,255,255,.55);stroke-dasharray:3 3}
+.ghit{fill:transparent;cursor:crosshair}
+.gtip{position:absolute;min-width:200px;padding:8px 10px;border-radius:6px;background:rgba(6,16,58,.96);border:1px solid rgba(200,215,245,.6);box-shadow:0 6px 18px rgba(0,0,0,.5);pointer-events:none;font-size:13px;z-index:2}
+.gtip[hidden]{display:none}
+.gtt{color:#8fd2ff;margin-bottom:5px;font-size:12px}
+.gtt span{color:#f3dc9a}
+.gtr{display:flex;align-items:center;gap:8px;line-height:1.5}
+.gtr i{width:12px;height:3px;border-radius:2px;flex:none}
+.gtr span{flex:1;color:var(--text)}
+.gtr b{font-weight:600;color:#fff}
+.glegend{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:"Saira Semi Condensed",Inter,sans-serif;font-size:13.5px;color:var(--text)}
+.gleg{display:flex;align-items:center;gap:7px;cursor:default}
+.gleg i{width:18px;height:3px;border-radius:2px;flex:none}
+.gleg b{color:var(--dim);font-weight:500}
+.gleg .raidk{height:11px;background:rgba(190,140,30,.85);border:1px solid rgba(255,226,150,.9)}
+.gleg .selfk{height:11px;background:rgba(40,120,200,.85);border:1px solid rgba(170,220,255,.9)}
+
+/* footer */
+footer{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:11.5px;color:var(--faint)}
+.status{display:flex;align-items:center;gap:8px}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.status.ok i{background:var(--good)}
+.status.wait i{background:#ffd166}
+.status.bad i{background:var(--bad)}
+kbd{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid rgba(220,228,245,.4);background:rgba(10,25,80,.6);color:var(--dim)}
+
+@media (max-width:900px){
+  .app{padding:18px 16px 12px}
+  h1{max-width:90vw;font-size:26px}
+  .toolbar{flex-direction:column;align-items:stretch}
+  .hist{justify-content:flex-start}
+  .stat{min-width:0;flex:1}
+  footer .keys{display:none}
+}
+</style>
+</head>
+<body class="empty">
+<div class="app">
+  <header>
+    <div class="enc">
+      <div class="meta"><span class="dot" id="dot"></span><span id="state">Waiting</span><span class="sep">·</span><span id="zone">—</span></div>
+      <h1 id="title">No encounter yet</h1>
+    </div>
+    <div class="stats">
+      <div class="stat"><label>Duration</label><b id="dur">00:00</b></div>
+      <div class="stat hero"><label id="totalLabel">Raid DPS</label><b id="total">0</b></div>
+      <div class="stat"><label>Total damage</label><b id="damage">0</b></div>
+      <div class="stat"><label>Deaths</label><b id="deaths">0</b></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tleft">
+      <div class="tabs" id="tabs">
+        <button data-v="dps" class="on">Damage</button>
+        <button data-v="hps">Healing</button>
+        <button data-v="taken">Taken</button>
+      </div>
+      <button class="fbtn" id="graphBtn" title="Damage over time for everyone">Graph</button>
+    </div>
+    <div class="hist" id="hist"></div>
+  </div>
+
+  <main class="board" id="board">
+    <div class="rows" id="rows"></div>
+    <div class="empty-state">
+      <div class="card">
+        <div class="ring"></div>
+        <h2>Waiting for combat data</h2>
+        <p id="emptyMsg"></p>
+        <button id="logBtn2">Load fights from log folder</button><button id="demoBtn">Preview with demo data</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span class="status wait" id="status"><i></i><span>Connecting…</span></span>
+    <span class="logctl"><button class="fbtn small" id="logBtn">Connect log folder</button><span class="logstate" id="logState"></span></span>
+    <span class="keys"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> views &nbsp; <kbd>H</kbd> hide names &nbsp; <kbd>D</kbd> demo &nbsp; <kbd>Esc</kbd> back to live &nbsp; click a player for skills</span>
+  </footer>
+</div>
+
+<div class="detail" id="detail" hidden>
+  <div class="dwin">
+    <div class="dhead">
+      <span class="job" id="dJob"></span>
+      <div><div class="dname" id="dName"></div><div class="dmeta" id="dMeta"></div></div>
+      <select class="dcmp" id="dCompare" title="Compare with another player"></select>
+      <button class="dx" id="dClose" title="Close (Esc)">✕</button>
+    </div>
+    <div class="dbar">
+      <div class="tabs dtabs" id="dTabs">
+        <button data-t="d" class="on">Damage</button>
+        <button data-t="h">Healing</button>
+        <button data-t="c">Casts</button>
+      </div>
+      <div class="xiva"><button class="fbtn" id="dGraphBtn" title="This player's damage over time">Graph</button><span id="xivaCode"></span><button class="fbtn" id="xivaBtn" title="Opens your FFLogs report in xivanalysis">Tips on xivanalysis ↗</button></div>
+    </div>
+    <form class="xivaform" id="xivaForm" hidden>
+      <input id="xivaInput" autocomplete="off" spellcheck="false" placeholder="Paste your FFLogs report link (fflogs.com/reports/…) or report code">
+      <button class="fbtn" type="submit">Save</button>
+      <button class="fbtn ghost" type="button" id="xivaCancel">Cancel</button>
+    </form>
+    <div class="dtable" id="dTable"></div>
+    <div class="dnote">Built from the combat log while this meter is open. Pet actions are folded into their owner. DoT and HoT ticks are estimates, so totals can differ slightly from the plate.</div>
+  </div>
+</div>
+
+<div class="detail graph" id="graph" hidden>
+  <div class="dwin gwin">
+    <div class="dhead">
+      <div><div class="dname" id="gTitle"></div><div class="dmeta" id="gMeta"></div></div>
+      <div class="tabs" id="gModes">
+        <button data-m="5">Rolling 5s</button>
+        <button data-m="15" class="on">Rolling 15s</button>
+        <button data-m="avg">Cumulative</button>
+      </div>
+      <button class="dx" id="gClose" title="Close (Esc)">✕</button>
+    </div>
+    <div class="gbox" id="gBox"></div>
+    <div class="glegend" id="gLegend"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const WS_URL = params.get('OVERLAY_WS') || params.get('ws') || 'ws://127.0.0.1:10501/ws';
+  const HISTORY_MAX = 25;
+  let hideNames = params.has('hidenames');
+
+  const JOBS = {
+    PLD:'#A8D2E6', WAR:'#CF2621', DRK:'#D126CC', GNB:'#9A8A4A',
+    WHM:'#FFF0DC', SCH:'#8657FF', AST:'#FFE74A', SGE:'#80A0F0',
+    MNK:'#D69C00', DRG:'#4164CD', NIN:'#AF1964', SAM:'#E46D04', RPR:'#965A90', VPR:'#2BA84A',
+    BRD:'#91BA5E', MCH:'#6EE1D6', DNC:'#E2B0AF',
+    BLM:'#A579D6', SMN:'#2D9B78', RDM:'#E87B7B', PCT:'#FC92E1', BLU:'#4F6BFF',
+    LB:'#F5C451'
+  };
+  const BASE = {GLA:'PLD',MRD:'WAR',CNJ:'WHM',PGL:'MNK',LNC:'DRG',ROG:'NIN',ARC:'BRD',THM:'BLM',ACN:'SMN'};
+  const jobColor = j => JOBS[j] || JOBS[BASE[j]] || '#9aa0b4';
+
+  const $ = id => document.getElementById(id);
+  const el = {
+    dot:$('dot'), state:$('state'), zone:$('zone'), title:$('title'), dur:$('dur'),
+    total:$('total'), totalLabel:$('totalLabel'), damage:$('damage'), deaths:$('deaths'),
+    tabs:$('tabs'), hist:$('hist'), board:$('board'), rows:$('rows'), status:$('status')
+  };
+  const emptyMsg = $('emptyMsg');
+
+  const num = v => { const n = parseFloat(String(v ?? '').replace(/[,%\s]/g,'')); return isFinite(n) ? n : 0; };
+  const fmt = n => Math.round(n).toLocaleString('en-US');
+  const compact = n => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e4 ? (n/1e3).toFixed(1)+'k' : fmt(n);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pct = v => (Math.round(v*10)/10) + '%';
+
+  // ---------- state ----------
+  let me = null, live = null, history = [], view = 'dps', selected = 'live';
+  let totalCur = 0, totalTarget = 0;
+  let demoTimer = null, msgCount = 0, lastSave = 0, connState = 'wait';
+  const STORE = 'parseboard.v1';
+  function save(force){
+    if (demoTimer) return;
+    const now = Date.now();
+    if (!force && now - lastSave < 3000) return;
+    lastSave = now;
+    try { localStorage.setItem(STORE, JSON.stringify({live, history, me})); } catch {}
+  }
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (d) { live = d.live ? {...d.live, active:false} : null; history = d.history || []; me = d.me || null; }
+  } catch {}
+
+  function splitMax(s){
+    s = String(s || ''); const i = s.lastIndexOf('-');
+    return i < 0 ? ['', 0] : [s.slice(0,i), num(s.slice(i+1))];
+  }
+
+  // ---------- combat log → per-skill breakdown ----------
+  const isPlayerId = id => /^10[0-9A-F]{6}$/i.test(id || '');
+  const hex = v => parseInt(v || '0', 16) >>> 0;
+  const decodeAmount = v => {
+    const n = hex(v);
+    if (n & 0x4000) { const a = (n >>> 24) & 255, b = (n >>> 16) & 255, d = n & 255; return (d << 16) | (a << 8) | b; }
+    return n >>> 16;
+  };
+  const newBd = start => ({players:{}, tl:{start: start || Date.now(), dmg:{}, buffs:[]}});
+  const RAID_BUFFS = ['Divination','Technical Finish','Battle Litany','Brotherhood','Embolden','Searing Light','Arcane Circle',
+    'Chain Stratagem','Dokumori','Radiant Finale','Battle Voice','Starry Muse'];
+  const SELF_BUFFS = ['No Mercy','Fight or Flight','Inner Release','Delirium','Riddle of Fire','Lance Charge','Meikyo Shisui',"Kunai's Bane",
+    'Wildfire','Ley Lines','Manafication','Barrage','Raging Strikes','Devilment','Reawakened','Hyperphantasia','Enshrouded','Inspiration'];
+  const BUFFKIND = {};
+  RAID_BUFFS.forEach(n => BUFFKIND[n] = 'raid'); SELF_BUFFS.forEach(n => BUFFKIND[n] = BUFFKIND[n] || 'self');
+  function addBuff(bd, ev){
+    const tl = bd.tl; if (!tl || !ev.t) return;
+    const a = (ev.t - tl.start) / 1000, b = a + (ev.dur || 15);
+    const ex = tl.buffs.find(x => x.n === ev.name && x.s === ev.src && Math.abs(x.a - a) < 3);
+    if (ex) { ex.b = Math.max(ex.b, Math.round(b * 10) / 10); return; }
+    tl.buffs.push({n:ev.name, s:ev.src, k:ev.k, a:Math.round(a * 10) / 10, b:Math.round(b * 10) / 10});
+  }
+  let bdLive = newBd(), pending = [];
+  const inCombat = () => !!(live && live.active);
+
+  function record(bd, ev){
+    if (ev.kind === 'buff') { addBuff(bd, ev); return; }
+    const p = bd.players[ev.n] || (bd.players[ev.n] = {abilities:{}});
+    const a = p.abilities[ev.a] || (p.abilities[ev.a] = {d:0,hits:0,crit:0,dh:0,max:0,casts:0,h:0,hhits:0,hcrit:0,hmax:0});
+    if (ev.cast) a.casts++;
+    if (ev.hit) { a.d += ev.d; a.hits++; if (ev.c) a.crit++; if (ev.dh) a.dh++; if (ev.d > a.max) a.max = ev.d; }
+    if (ev.h) { a.h += ev.h; a.hhits++; if (ev.hc) a.hcrit++; if (ev.h > a.hmax) a.hmax = ev.h; }
+    if (ev.hit && ev.d && bd.tl && ev.t) {
+      const i = Math.floor((ev.t - bd.tl.start) / 1000);
+      if (i >= 0 && i < 7200) { const arr = bd.tl.dmg[ev.n] || (bd.tl.dmg[ev.n] = []); arr[i] = (arr[i] || 0) + ev.d; }
+    }
+  }
+  function pushEv(ev){
+    ev.t = Date.now();
+    if (inCombat()) { record(bdLive, ev); return; }
+    pending.push(ev);                                  // pre-pull buffer (catches the opener)
+    while (pending.length && ev.t - pending[0].t > 12000) pending.shift();
+    if (pending.length > 4000) pending.shift();
+  }
+  function onLogLine(L){
+    const t = L[0];
+    if (t === '21' || t === '22') {
+      let src = L[2], name = L[3], ability = L[5] || 'Unknown';
+      const own = L[47];
+      if (isPlayerId(own) && own !== src) { src = own; name = L[48]; ability += ' (pet)'; }
+      if (!isPlayerId(src) || !name) return;
+      let hit = false, d = 0, c = false, dh = false, h = 0, hc = false;
+      for (let i = 8; i <= 22; i += 2) {
+        const f = hex(L[i]), ty = f & 0xff;
+        if (!hit && (ty === 3 || ty === 5 || ty === 6)) {
+          hit = true; d = decodeAmount(L[i+1]);
+          const sev = (f >>> 8) & 0xff; c = !!(sev & 0x20); dh = !!(sev & 0x40);
+        } else if (!h && ty === 4) {
+          h = decodeAmount(L[i+1]); hc = !!(((f >>> 16) & 0xff) & 0x20);
+        }
+      }
+      const cast = L[45] === undefined || L[45] === '' || L[45] === '0';
+      pushEv({n:name, a:ability, hit, d, c, dh, h, hc, cast});
+    } else if (t === '26') {
+      const k = BUFFKIND[L[3]];
+      if (k && isPlayerId(L[5])) pushEv({kind:'buff', name:L[3], src:L[6], k, dur:parseFloat(L[4]) || 15});
+    } else if (t === '24') {
+      const src = L[17], name = L[18];
+      if (!isPlayerId(src) || !name) return;
+      const v = hex(L[6]);
+      if (L[4] === 'DoT') pushEv({n:name, a:'DoT ticks (est.)', hit:true, d:v, c:false, dh:false, h:0, cast:false});
+      else if (L[4] === 'HoT') pushEv({n:name, a:'HoT ticks (est.)', hit:false, d:0, h:v, hc:false, cast:false});
+    }
+  }
+
+  function normalize(m){
+    const E = m.Encounter || {};
+    const rows = [];
+    for (const [key, c] of Object.entries(m.Combatant || {})) {
+      const raw = c.name || key;
+      const isLB = raw === 'Limit Break';
+      const job = isLB ? 'LB' : String(c.Job || '').toUpperCase();
+      if (!job) continue; // pets / unknowns
+      const [mxName, mxVal] = splitMax(c.maxhit);
+      const isMe = raw === 'YOU' || (me && raw === me);
+      rows.push({
+        key: raw, name: raw === 'YOU' ? (me || 'You') : raw, isMe, job,
+        dps:num(c.encdps), damage:num(c.damage),
+        hps:num(c.enchps), healed:num(c.healed), overheal:num(c.OverHealPct),
+        taken:num(c.damagetaken), deaths:num(c.deaths),
+        crit:num(c['crithit%']), dh:num(c.DirectHitPct), cdh:num(c.CritDirectHitPct),
+        maxName:mxName, maxVal:mxVal || num(c.MAXHIT)
+      });
+    }
+    return {
+      t: Date.now(),
+      title: E.title && E.title !== 'Encounter' ? E.title : (E.CurrentZoneName || 'Encounter'),
+      zone: E.CurrentZoneName || '',
+      duration: E.duration || '00:00', secs: num(E.DURATION),
+      dps:num(E.ENCDPS), hps:num(E.ENCHPS), damage:num(E.damage), deaths:num(E.deaths),
+      active: String(m.isActive) === 'true',
+      rows
+    };
+  }
+
+  function handle(m){
+    if (!m || !m.type) return;
+    if (m.type === 'ChangePrimaryPlayer') { me = m.charName || me; return; }
+    if (m.type === 'LogLine') { if (Array.isArray(m.line)) onLogLine(m.line); return; }
+    if (m.type !== 'CombatData') return;
+    const snap = normalize(m);
+    const wasActive = live && live.active;
+    if (snap.active && !wasActive) {                                    // new pull
+      if (live) selected = 'live';
+      bdLive = newBd(Date.now() - (snap.secs || 0) * 1000);
+      pending.forEach(ev => record(bdLive, ev)); pending = [];
+    }
+    if (!snap.active && wasActive && snap.damage > 0) {                 // pull ended → archive
+      snap.bd = bdLive; bdLive = newBd(); pending = [];
+      history.unshift(snap);
+      history = history.slice(0, HISTORY_MAX);
+    }
+    live = snap;
+    save(!snap.active);
+    renderHist();
+    render();
+    renderDetail();
+    renderGraph(false);
+  }
+
+  // ---------- views ----------
+  const VIEWS = {
+    dps: {
+      key:'dps', lbl:'DPS', totalLabel:'Raid DPS', filter:r => r.damage > 0, total:(s)=>s.dps,
+      sub: r => [
+        `Crit ${pct(r.crit)}`, `DH ${pct(r.dh)}`, `CDH ${pct(r.cdh)}`,
+        r.deaths ? `<b class="death">✕ ${r.deaths}</b>` : '',
+        r.maxVal ? `<span class="mx">Max ${compact(r.maxVal)}${r.maxName ? ' · ' + esc(r.maxName) : ''}</span>` : ''
+      ]
+    },
+    hps: {
+      key:'hps', lbl:'HPS', totalLabel:'Raid HPS', filter:r => r.hps > 0 && r.job !== 'LB', total:(s)=>s.hps,
+      sub: r => [`Healed ${compact(r.healed)}`, `Overheal ${r.overheal == null ? '—' : pct(r.overheal)}`, r.deaths ? `<b class="death">✕ ${r.deaths}</b>` : '']
+    },
+    taken: {
+      key:'taken', lbl:'Taken', totalLabel:'Damage taken', filter:r => r.taken > 0 && r.job !== 'LB', total:(s,sum)=>sum,
+      sub: r => [r.deaths ? `<b class="death">✕ ${r.deaths} death${r.deaths>1?'s':''}</b>` : 'No deaths']
+    }
+  };
+
+  const rowMap = new Map();
+  const current = () => selected === 'live' ? live : (history.find(h => h.t === selected) || live);
+  const displayName = r => hideNames ? (r.isMe ? 'You' : r.job === 'LB' ? 'Limit Break' : r.job) : r.name;
+
+  function mkRow(key){
+    const d = document.createElement('div');
+    d.className = 'row';
+    d.onclick = () => openDetail(key);
+    d.innerHTML = `<div class="plate"></div>
+      <div class="tab"><span class="rank"></span><span class="job"></span><span class="n"></span><span class="you">YOU</span></div>
+      <div class="readout"><span class="lbl"></span><span class="num">0</span><span class="pct"></span></div>
+      <div class="track"><div class="fill"></div></div>
+      <div class="sub"></div>`;
+    d.q = {fill:d.querySelector('.fill'), rank:d.querySelector('.rank'), job:d.querySelector('.job'), lbl:d.querySelector('.lbl'),
+           name:d.querySelector('.n'), sub:d.querySelector('.sub'), num:d.querySelector('.num'), pct:d.querySelector('.pct')};
+    d.cur = 0; d.target = 0;
+    return d;
+  }
+
+  function render(){
+    const s = current();
+    document.body.classList.toggle('empty', !s);
+    if (!s) return;
+    const v = VIEWS[view];
+    const list = s.rows.filter(v.filter).sort((a,b) => b[v.key] - a[v.key]);
+    const top = list[0]?.[v.key] || 1;
+    const sum = list.reduce((a,r) => a + r[v.key], 0) || 1;
+
+    // fit rows to the window
+    const gap = 10, n = Math.max(list.length, 1);
+    const rh = Math.max(42, Math.min(80, Math.floor((el.board.clientHeight - gap*(n-1)) / n)));
+    el.rows.style.setProperty('--rowh', rh + 'px');
+    el.rows.classList.toggle('tight', rh < 54);
+    el.rows.style.height = (list.length * (rh + gap)) + 'px';
+
+    const seen = new Set();
+    list.forEach((r, i) => {
+      seen.add(r.key);
+      let d = rowMap.get(r.key);
+      if (!d) { d = mkRow(r.key); rowMap.set(r.key, d); el.rows.appendChild(d); }
+      d.style.setProperty('--jc', jobColor(r.job));
+      d.style.transform = `translateY(${i * (rh + gap)}px)`;
+      d.classList.toggle('me', !!r.isMe);
+      d.q.rank.textContent = i + 1;
+      d.q.job.textContent = r.job;
+      d.q.name.textContent = displayName(r);
+      d.q.sub.innerHTML = v.sub(r).filter(Boolean).map(x => x.startsWith('<') ? x : `<span>${x}</span>`).join('');
+      d.q.fill.style.width = (r[v.key] / top * 100) + '%';
+      d.q.pct.textContent = '/' + (r[v.key] / sum * 100).toFixed(1) + '%';
+      d.q.lbl.textContent = v.lbl;
+      d.target = r[v.key];
+    });
+    for (const [k, d] of rowMap) if (!seen.has(k)) { d.remove(); rowMap.delete(k); }
+
+    // header
+    const isLive = selected === 'live';
+    el.title.textContent = s.title;
+    el.zone.textContent = s.zone || '—';
+    el.dur.textContent = s.duration;
+    el.dot.classList.toggle('live', isLive && s.active);
+    el.state.textContent = !isLive ? 'Previous pull' : s.active ? 'In combat' : 'Out of combat';
+    el.totalLabel.textContent = v.totalLabel;
+    totalTarget = v.total(s, list.reduce((a,r)=>a+r[v.key],0));
+    el.damage.textContent = compact(s.damage);
+    el.deaths.textContent = s.deaths;
+  }
+
+  function renderHist(){
+    el.hist.innerHTML = '';
+    const mk = (label, sub, id) => {
+      const b = document.createElement('button');
+      b.className = 'chip' + (selected === id ? ' on' : '');
+      b.innerHTML = `<span>${esc(label)}</span>${sub ? `<em>${esc(sub)}</em>` : ''}`;
+      b.onclick = () => select(id);
+      el.hist.appendChild(b);
+    };
+    if (history.length) mk('Live', '', 'live');
+    history.forEach(h => mk(h.title, h.duration + (h.recovered ? ' · log' : ''), h.t));
+  }
+  function select(id){ selected = id; renderHist(); render(); renderDetail(); renderGraph(true); }
+
+  // smooth number tweening
+  (function tick(){
+    for (const d of rowMap.values()) {
+      const diff = d.target - d.cur;
+      if (diff) {
+        d.cur = Math.abs(diff) < 1 ? d.target : d.cur + diff * 0.14;
+        const t = fmt(d.cur);
+        if (d.q.num.textContent !== t) d.q.num.textContent = t;
+      }
+    }
+    const diff = totalTarget - totalCur;
+    if (diff) {
+      totalCur = Math.abs(diff) < 1 ? totalTarget : totalCur + diff * 0.14;
+      el.total.textContent = fmt(totalCur);
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  // ---------- controls ----------
+  el.tabs.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    setView(b.dataset.v);
+  });
+  function setView(v){
+    view = v;
+    [...el.tabs.children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    render();
+  }
+  addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (graphOpen()) { if (e.key === 'Escape') closeGraph(); return; }
+    if (detailKey && e.key !== 'Escape') return;
+    if (e.key === '1') setView('dps');
+    else if (e.key === '2') setView('hps');
+    else if (e.key === '3') setView('taken');
+    else if (e.key.toLowerCase() === 'h') { hideNames = !hideNames; render(); }
+    else if (e.key.toLowerCase() === 'd') startDemo();
+    else if (e.key === 'Escape') { if (detailKey) closeDetail(); else select('live'); }
+  });
+  addEventListener('resize', () => { render(); renderGraph(true); });
+  $('demoBtn').onclick = startDemo;
+
+  // ---------- skill breakdown window ----------
+  let detailKey = null, detailTab = 'd', compareKey = null;
+  const dEl = {wrap:$('detail'), job:$('dJob'), name:$('dName'), meta:$('dMeta'), tabs:$('dTabs'), table:$('dTable')};
+  const pc = (n, d) => d ? Math.round(n / d * 100) + '%' : '—';
+  const TABLES = {
+    d: { key:'d', filter:a => a.d > 0, unit:'damage', cols:[
+      ['Damage', a => fmt(a.d)], ['Share', (a,t) => (a.d/t*100).toFixed(1)+'%'], ['Casts', a => a.casts || '—'],
+      ['Hits', a => a.hits], ['Crit', a => pc(a.crit, a.hits)], ['DH', a => pc(a.dh, a.hits)],
+      ['Avg', a => compact(a.d / a.hits)], ['Max', a => compact(a.max)] ]},
+    h: { key:'h', filter:a => a.h > 0, unit:'healing', cols:[
+      ['Healed', a => fmt(a.h)], ['Share', (a,t) => (a.h/t*100).toFixed(1)+'%'], ['Casts', a => a.casts || '—'],
+      ['Hits', a => a.hhits], ['Crit', a => pc(a.hcrit, a.hhits)], ['Avg', a => compact(a.h / a.hhits)], ['Max', a => compact(a.hmax)] ]},
+    c: { key:'casts', filter:a => a.casts > 0, unit:'casts', cols:[
+      ['Casts', a => a.casts], ['Share', (a,t) => (a.casts/t*100).toFixed(1)+'%'],
+      ['Damage', a => a.d ? compact(a.d) : '—'], ['Healed', a => a.h ? compact(a.h) : '—'],
+      ['Per cast', a => a.d ? compact(a.d / a.casts) : a.h ? compact(a.h / a.casts) : '—'] ]}
+  };
+  function openDetail(key){
+    detailKey = key; compareKey = null; detailTab = view === 'hps' ? 'h' : 'd';
+    dEl.wrap.hidden = false; renderDetail();
+  }
+  function closeDetail(){ detailKey = null; compareKey = null; dEl.wrap.hidden = true; }
+  const dCmp = $('dCompare');
+  dCmp.onchange = () => { compareKey = dCmp.value || null; renderDetail(); };
+  const plFor = (bd, row, key) => bd.players[row ? row.name : key] || (key === 'YOU' && me ? bd.players[me] : null);
+  $('dClose').onclick = closeDetail;
+  dEl.wrap.addEventListener('click', e => { if (e.target === dEl.wrap) closeDetail(); });
+  dEl.tabs.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    detailTab = b.dataset.t; renderDetail();
+  });
+
+  function renderDetail(){
+    if (!detailKey) return;
+    const s = current();
+    const r = s && s.rows.find(x => x.key === detailKey);
+    const bd = (s && s.bd) || (selected === 'live' ? bdLive : newBd());
+    const realName = r ? r.name : detailKey;
+    const pl = bd.players[realName] || (detailKey === 'YOU' && me ? bd.players[me] : null);
+    const T = TABLES[detailTab];
+    [...dEl.tabs.children].forEach(b => b.classList.toggle('on', b.dataset.t === detailTab));
+    const color = jobColor(r ? r.job : '');
+    dEl.wrap.style.setProperty('--jc', color);
+    dEl.job.textContent = r ? r.job : '—';
+    dEl.job.style.setProperty('--jc', color);
+    dEl.name.textContent = r ? displayName(r) : detailKey;
+
+    const others = s ? s.rows.filter(x => x.key !== detailKey && x.job !== 'LB') : [];
+    const opts = '<option value="">Compare with…</option>' + others.map(o => `<option value="${esc(o.key)}">${esc(displayName(o))} · ${o.job}</option>`).join('');
+    if (dCmp.dataset.sig !== opts) { dCmp.innerHTML = opts; dCmp.dataset.sig = opts; }
+    if (compareKey && !others.some(o => o.key === compareKey)) compareKey = null;
+    dCmp.value = compareKey || '';
+    if (compareKey && r) return renderCompare(bd, r, others.find(o => o.key === compareKey), T);
+
+    const list = pl ? Object.entries(pl.abilities).map(([n,a]) => ({n, ...a})).filter(T.filter).sort((a,b) => b[T.key] - a[T.key]) : [];
+    const total = list.reduce((x,a) => x + a[T.key], 0);
+    const casts = pl ? Object.values(pl.abilities).reduce((x,a) => x + a.casts, 0) : 0;
+    const head = r ? (detailTab === 'h' ? `HPS ${fmt(r.hps)}` : `DPS ${fmt(r.dps)}`) + ' · ' : '';
+    dEl.meta.textContent = head + (list.length ? (detailTab === 'c' ? `${casts} casts · ${list.length} skills` : `${compact(total)} ${T.unit} · ${list.length} skills · ${casts} casts`) : 'No skill data yet');
+
+    if (!list.length) {
+      dEl.table.innerHTML = `<div class="dempty">No ${T.unit} logged for this player in this fight.<br>Skill data only covers actions logged while the meter was open.</div>`;
+      return;
+    }
+    const grid = `grid-template-columns:minmax(0,1fr) repeat(${T.cols.length},minmax(64px,92px))`;
+    const top = list[0][T.key] || 1;
+    let html = `<div class="drow hd" style="${grid}"><span class="a">Skill</span>${T.cols.map(c => `<span>${c[0]}</span>`).join('')}</div>`;
+    for (const a of list) {
+      html += `<div class="drow" style="${grid}"><span class="a"><div class="aname">${esc(a.n)}</div><div class="abar"><i style="width:${(a[T.key]/top*100).toFixed(1)}%"></i></div></span>${T.cols.map(c => `<span>${c[1](a, total || 1)}</span>`).join('')}</div>`;
+    }
+    const keepScroll = dEl.table.scrollTop;
+    dEl.table.innerHTML = html;
+    dEl.table.scrollTop = keepScroll;
+  }
+
+  // ---------- xivanalysis link ----------
+  const XKEY = 'parseboard.fflogs';
+  let fflogsCode = ''; try { fflogsCode = localStorage.getItem(XKEY) || ''; } catch {}
+  const xEl = {btn:$('xivaBtn'), code:$('xivaCode'), form:$('xivaForm'), input:$('xivaInput')};
+  const parseCode = v => {
+    v = (v || '').trim();
+    const m = v.match(/reports\/([A-Za-z0-9]{8,})/);
+    if (m) return m[1];
+    return /^[A-Za-z0-9]{8,}$/.test(v) ? v : '';
+  };
+  function syncX(){
+    xEl.code.innerHTML = fflogsCode ? `Report <b>${esc(fflogsCode)}</b> · <a href="#" id="xivaChange">change</a>` : 'No FFLogs report set';
+    const c = $('xivaChange'); if (c) c.onclick = e => { e.preventDefault(); showXForm(); };
+  }
+  function showXForm(){ xEl.form.hidden = false; xEl.input.value = fflogsCode; xEl.input.focus(); xEl.input.select(); }
+  xEl.btn.onclick = () => {
+    if (!fflogsCode) return showXForm();
+    window.open('https://xivanalysis.com/fflogs/' + encodeURIComponent(fflogsCode), '_blank', 'noopener');
+  };
+  xEl.form.onsubmit = e => {
+    e.preventDefault();
+    const c = parseCode(xEl.input.value);
+    if (!c) { xEl.input.setCustomValidity('That doesn\'t look like an FFLogs report link or code.'); xEl.input.reportValidity(); return; }
+    fflogsCode = c; try { localStorage.setItem(XKEY, c); } catch {}
+    xEl.form.hidden = true; syncX();
+  };
+  xEl.input.oninput = () => xEl.input.setCustomValidity('');
+  xEl.input.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); xEl.form.hidden = true; } };
+  $('xivaCancel').onclick = () => { xEl.form.hidden = true; };
+  syncX();
+
+  function renderCompare(bd, A, B, T){
+    const pa = plFor(bd, A, A.key), pb = plFor(bd, B, B.key);
+    const ca = jobColor(A.job); let cb = jobColor(B.job); if (cb === ca) cb = '#e4e9f5';
+    const nA = displayName(A), nB = displayName(B);
+    const sumOf = (pl, k) => pl ? Object.values(pl.abilities).reduce((x,a) => x + a[k], 0) : 0;
+    dEl.meta.textContent = `Comparing with ${nB} · ${T.unit}`;
+
+    const stats = [
+      ['DPS', A.dps, B.dps, fmt], ['HPS', A.hps, B.hps, fmt], ['Damage', A.damage, B.damage, compact],
+      ['Crit', A.crit, B.crit, pct], ['Direct hit', A.dh, B.dh, pct], ['Crit DH', A.cdh, B.cdh, pct],
+      ['Casts', sumOf(pa,'casts'), sumOf(pb,'casts'), v => v], ['Max hit', A.maxVal, B.maxVal, compact],
+      ['Deaths', A.deaths, B.deaths, v => v, true]
+    ];
+    let html = `<div class="vs">
+      <div class="who l"><span class="job" style="--jc:${ca}">${A.job}</span><span class="n">${esc(nA)}</span></div>
+      <div class="vsx">VS</div>
+      <div class="who r"><span class="n">${esc(nB)}</span><span class="job" style="--jc:${cb}">${B.job}</span></div>`;
+    for (const [k, a, b, f, lowerBetter] of stats) {
+      const m = Math.max(a, b) || 1;
+      const aBest = a !== b && (lowerBetter ? a < b : a > b), bBest = a !== b && !aBest;
+      html += `<div class="v l ${aBest ? 'best' : ''}">${f(a)}</div>
+        <div class="vbar l" style="--c:${ca}"><i style="width:${(a/m*100).toFixed(1)}%"></i></div>
+        <div class="k">${k}</div>
+        <div class="vbar" style="--c:${cb}"><i style="width:${(b/m*100).toFixed(1)}%"></i></div>
+        <div class="v ${bBest ? 'best' : ''}">${f(b)}</div>`;
+    }
+    html += `</div>`;
+
+    const listOf = pl => pl ? Object.entries(pl.abilities).map(([n,a]) => ({n, ...a})).filter(T.filter) : [];
+    const LA = listOf(pa), LB = listOf(pb);
+    const amt = a => a ? a[T.key] : 0;
+
+    if (A.job === B.job) {
+      const names = [...new Set([...LA.map(a => a.n), ...LB.map(a => a.n)])];
+      const ma = Object.fromEntries(LA.map(a => [a.n, a])), mb = Object.fromEntries(LB.map(a => [a.n, a]));
+      names.sort((x, y) => Math.max(amt(mb[y]), amt(ma[y])) - Math.max(amt(mb[x]), amt(ma[x])));
+      const top = Math.max(1, ...names.map(n => Math.max(amt(ma[n]), amt(mb[n]))));
+      const short = n => esc(String(n).split(' ')[0]);
+      const grid = 'grid-template-columns:minmax(0,1fr) repeat(5,minmax(64px,96px))';
+      const show = v => detailTab === 'c' ? v : compact(v);
+      html += `<div class="drow hd" style="${grid}"><span class="a">Skill</span><span>${short(nA)}</span><span>${short(nB)}</span><span>Diff</span><span>${short(nA)} casts</span><span>${short(nB)} casts</span></div>`;
+      if (!names.length) html += `<div class="dempty">No ${T.unit} logged for either player in this fight.</div>`;
+      for (const n of names) {
+        const a = ma[n], b = mb[n], va = amt(a), vb = amt(b);
+        let diff = '—', cls = '';
+        if (va && vb) { const d = (va - vb) / vb * 100; diff = (d > 0 ? '+' : '') + d.toFixed(0) + '%'; cls = d > 0.5 ? 'up' : d < -0.5 ? 'down' : ''; }
+        else if (va) { diff = 'only ' + short(nA); cls = 'up'; } else if (vb) { diff = 'only ' + short(nB); cls = 'down'; }
+        html += `<div class="drow" style="${grid}"><span class="a"><div class="aname">${esc(n)}</div>
+          <div class="abar two"><i style="--c:${ca};width:${(va/top*100).toFixed(1)}%"></i><i style="--c:${cb};width:${(vb/top*100).toFixed(1)}%"></i></div></span>
+          <span>${va ? show(va) : '—'}</span><span>${vb ? show(vb) : '—'}</span><span class="${cls}">${diff}</span>
+          <span>${a ? a.casts || '—' : '—'}</span><span>${b ? b.casts || '—' : '—'}</span></div>`;
+      }
+    } else {
+      const col = (L, name, c) => {
+        L.sort((x, y) => y[T.key] - x[T.key]);
+        const tot = L.reduce((x, a) => x + a[T.key], 0) || 1, top = L[0] ? L[0][T.key] || 1 : 1;
+        const grid = 'grid-template-columns:minmax(0,1fr) 78px 58px 52px';
+        let h = `<div><h4>${esc(name)}</h4><div class="drow hd" style="${grid}"><span class="a">Skill</span><span>${detailTab === 'c' ? 'Casts' : 'Amount'}</span><span>Share</span><span>Casts</span></div>`;
+        if (!L.length) h += `<div class="dempty">No ${T.unit} logged.</div>`;
+        for (const a of L) h += `<div class="drow" style="${grid}"><span class="a"><div class="aname">${esc(a.n)}</div><div class="abar" style="--jc:${c}"><i style="width:${(a[T.key]/top*100).toFixed(1)}%"></i></div></span><span>${detailTab === 'c' ? a.casts : compact(a[T.key])}</span><span>${(a[T.key]/tot*100).toFixed(1)}%</span><span>${a.casts || '—'}</span></div>`;
+        return h + '</div>';
+      };
+      html += `<div class="dpair">${col(LA, nA, ca)}${col(LB, nB, cb)}</div>`;
+    }
+    const keep = dEl.table.scrollTop;
+    dEl.table.innerHTML = html;
+    dEl.table.scrollTop = keep;
+  }
+
+  // ---------- IINACT log folder: backfill + recovery ----------
+  const JOBIDS = {1:'GLA',2:'PGL',3:'MRD',4:'LNC',5:'ARC',6:'CNJ',7:'THM',19:'PLD',20:'MNK',21:'WAR',22:'DRG',23:'BRD',24:'WHM',25:'BLM',
+    26:'ACN',27:'SMN',28:'SCH',29:'ROG',30:'NIN',31:'MCH',32:'DRK',33:'AST',34:'SAM',35:'RDM',36:'BLU',37:'GNB',38:'DNC',39:'RPR',40:'SGE',41:'VPR',42:'PCT'};
+  const WANT = new Set(['01','02','03','11','21','22','24','25','26','260']);
+  const ENC_GAP = 20000, CHUNK = 4 * 1024 * 1024;
+  const tsMs = v => Date.parse(v && v.length > 29 ? v.slice(0, 23) + v.slice(-6) : v);
+  const mmss = sec => { sec = Math.round(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), x = sec % 60;
+    return (h ? h + ':' + String(m).padStart(2,'0') : String(m).padStart(2,'0')) + ':' + String(x).padStart(2,'0'); };
+  const durSecs = d => String(d || '0').split(':').reduce((a, v) => a * 60 + (parseFloat(v) || 0), 0);
+
+  let LP;
+  function resetLP(){ LP = {selfId:null, selfName:null, party:new Set(), jobs:{}, names:{}, owners:{}, zone:'', has260:false, enc:null, lastDmgT:0, done:[], deferred:[], all:[]}; }
+  resetLP();
+  const isFriend = id => id === LP.selfId || LP.party.has(id);
+
+  function startEnc(ts){ LP.enc = {key:String(ts), start:ts, end:ts, zone:LP.zone, bd:newBd(ts), stats:{}, targets:{}}; LP.lastDmgT = ts; }
+  function finishEnc(endTs){
+    const E = LP.enc; LP.enc = null; if (!E) return;
+    E.end = Math.max(E.start, endTs);
+    const tot = Object.values(E.stats).reduce((a, x) => a + x.damage, 0);
+    if (tot > 0 && E.end - E.start >= 5000) LP.done.push(E);
+  }
+  const stOf = (E, id, name) => E.stats[name] || (E.stats[name] = {id, damage:0, hits:0, crit:0, dh:0, cdh:0, max:0, maxName:'', heal:0, taken:0, deaths:0});
+
+  function logAbility(L, ts){
+    let src = L[2], name = L[3], ab = L[5] || 'Unknown', pet = false;
+    let own = L[47]; if (!isPlayerId(own)) own = LP.owners[src];
+    if (isPlayerId(own) && own !== src) { src = own; name = LP.names[own] || L[48] || name; ab += ' (pet)'; pet = true; }
+    const tgt = L[6];
+    let hit = false, d = 0, c = false, dh = false, h = 0, hc = false;
+    for (let i = 8; i <= 22; i += 2) {
+      const f = hex(L[i]), ty = f & 0xff;
+      if (!hit && (ty === 3 || ty === 5 || ty === 6)) { hit = true; d = decodeAmount(L[i+1]); const sev = (f >>> 8) & 0xff; c = !!(sev & 0x20); dh = !!(sev & 0x40); }
+      else if (!h && ty === 4) { h = decodeAmount(L[i+1]); hc = !!(((f >>> 16) & 0xff) & 0x20); }
+    }
+    const srcPlayer = isPlayerId(src);
+    const hostile = hit && !!tgt && tgt !== src &&
+      (tgt[0] === '4' ? srcPlayer : (isPlayerId(tgt) && srcPlayer && isFriend(src) !== isFriend(tgt)));
+    if (hostile && !LP.has260 && !LP.enc) startEnc(ts);
+    if (hostile) LP.lastDmgT = Math.max(LP.lastDmgT, ts);
+    const E = LP.enc; if (!E) return;
+    if (srcPlayer) {
+      const cast = L[45] === undefined || L[45] === '' || L[45] === '0';
+      record(E.bd, {n:name, a:ab, hit:hostile, d, c, dh, h, hc, cast, t:ts});
+      const S = stOf(E, src, name);
+      if (hostile) {
+        S.damage += d; S.hits++;
+        if (c) S.crit++; if (dh) S.dh++; if (c && dh) S.cdh++;
+        if (d > S.max) { S.max = d; S.maxName = ab; }
+        E.targets[L[7]] = (E.targets[L[7]] || 0) + d;
+      }
+      if (h) S.heal += h;
+    }
+    if (hit && isPlayerId(tgt) && ((L[2] || '')[0] === '4' || hostile)) stOf(E, tgt, L[7]).taken += d;
+  }
+  function logDot(L, ts){
+    const src = L[17], name = L[18], E = LP.enc;
+    if (!E || !isPlayerId(src) || !name) return;
+    const v = hex(L[6]);
+    if (L[4] === 'DoT') {
+      record(E.bd, {n:name, a:'DoT ticks (est.)', hit:true, d:v, c:false, dh:false, h:0, cast:false, t:ts});
+      stOf(E, src, name).damage += v; E.targets[L[3]] = (E.targets[L[3]] || 0) + v; LP.lastDmgT = Math.max(LP.lastDmgT, ts);
+    } else if (L[4] === 'HoT') {
+      record(E.bd, {n:name, a:'HoT ticks (est.)', hit:false, d:0, h:v, hc:false, cast:false, t:ts});
+      stOf(E, src, name).heal += v;
+    }
+  }
+  function processLine(raw){
+    const bar = raw.indexOf('|'); if (bar < 2 || bar > 3) return;
+    const t = raw.slice(0, bar); if (!WANT.has(t)) return;
+    const L = raw.replace(/\r$/, '').split('|');
+    const ts = tsMs(L[1]); if (!isFinite(ts)) return;
+    if (!LP.has260 && LP.enc && ts - LP.lastDmgT > ENC_GAP) finishEnc(LP.lastDmgT);
+    switch (t) {
+      case '01': if (LP.enc) finishEnc(LP.has260 ? ts : LP.lastDmgT); LP.zone = L[3] || ''; break;
+      case '02': LP.selfId = L[2]; LP.selfName = L[3]; break;
+      case '03': { const id = L[2]; LP.names[id] = L[3]; const j = JOBIDS[parseInt(L[4], 16)]; if (j) LP.jobs[id] = j; if (isPlayerId(L[6])) LP.owners[id] = L[6]; break; }
+      case '11': { const n = parseInt(L[2], 10) || 0; LP.party = new Set(L.slice(3, 3 + n)); break; }
+      case '260': { LP.has260 = true; const inAct = L[2] === '1'; if (inAct && !LP.enc) startEnc(ts); else if (!inAct && LP.enc) finishEnc(ts); break; }
+      case '21': case '22': logAbility(L, ts); break;
+      case '24': logDot(L, ts); break;
+      case '25': if (LP.enc && isPlayerId(L[2])) stOf(LP.enc, L[2], L[3]).deaths++; break;
+      case '26': { const k = BUFFKIND[L[3]]; if (LP.enc && k && isPlayerId(L[5])) record(LP.enc.bd, {kind:'buff', name:L[3], src:L[6], k, dur:parseFloat(L[4]) || 15, t:ts}); break; }
+    }
+  }
+
+  function encToSnap(E){
+    const secs = Math.max(1, (E.end - E.start) / 1000);
+    const inParty = id => !LP.party.size || LP.party.has(id) || id === LP.selfId;
+    const rows = [];
+    for (const [name, S] of Object.entries(E.stats)) {
+      if (!isPlayerId(S.id) || !(S.damage > 0 || S.heal > 0) || !inParty(S.id)) continue;
+      rows.push({key:name, name, isMe:S.id === LP.selfId, job:LP.jobs[S.id] || '?',
+        dps:S.damage / secs, damage:S.damage, hps:S.heal / secs, healed:S.heal, overheal:null, taken:S.taken, deaths:S.deaths,
+        crit:S.hits ? S.crit / S.hits * 100 : 0, dh:S.hits ? S.dh / S.hits * 100 : 0, cdh:S.hits ? S.cdh / S.hits * 100 : 0,
+        maxName:S.maxName, maxVal:S.max});
+    }
+    const dmg = rows.reduce((a, r) => a + r.damage, 0), heal = rows.reduce((a, r) => a + r.healed, 0);
+    const top = Object.entries(E.targets).sort((a, b) => b[1] - a[1])[0];
+    return {t:E.end, secs, title:(top && top[0]) || E.zone || 'Encounter', zone:E.zone, duration:mmss(secs),
+      dps:dmg / secs, hps:heal / secs, damage:dmg, deaths:rows.reduce((a, r) => a + r.deaths, 0),
+      active:false, rows, bd:E.bd, segs:[E.key], bdFromLog:true, recovered:true};
+  }
+  const bdTotal = bd => { let t = 0; for (const p of Object.values((bd && bd.players) || {})) for (const a of Object.values(p.abilities)) t += a.d + a.h; return t; };
+  function mergeBd(list){
+    if (list.length === 1) return list[0];
+    const starts = list.filter(b => b.tl).map(b => b.tl.start);
+    const out = newBd(starts.length ? Math.min(...starts) : Date.now());
+    for (const bd of list) {
+      if (!bd.tl) continue;
+      const off = Math.round((bd.tl.start - out.tl.start) / 1000);
+      for (const [n, arr] of Object.entries(bd.tl.dmg)) {
+        const o = out.tl.dmg[n] || (out.tl.dmg[n] = []);
+        arr.forEach((v, i) => { if (v) o[i + off] = (o[i + off] || 0) + v; });
+      }
+      bd.tl.buffs.forEach(b => out.tl.buffs.push({...b, a:b.a + off, b:b.b + off}));
+    }
+    for (const bd of list) for (const [n, p] of Object.entries(bd.players)) {
+      const op = out.players[n] || (out.players[n] = {abilities:{}});
+      for (const [an, a] of Object.entries(p.abilities)) {
+        const o = op.abilities[an];
+        if (!o) { op.abilities[an] = {...a}; continue; }
+        for (const k of ['d','hits','crit','dh','casts','h','hhits','hcrit']) o[k] += a[k];
+        o.max = Math.max(o.max, a.max); o.hmax = Math.max(o.hmax, a.hmax);
+      }
+    }
+    return out;
+  }
+  const overlaps = (h, E) => {
+    const secs = h.secs != null && h.secs > 0 ? h.secs : durSecs(h.duration);
+    return E.start < h.t + 8000 && E.end > h.t - secs * 1000 - 8000;
+  };
+  function reconcile(){
+    const encs = LP.deferred.concat(LP.done); LP.deferred = []; LP.done = [];
+    let changed = false;
+    for (const E of encs) {
+      if (!LP.all.includes(E)) LP.all.push(E);
+      // overlaps the fight in progress → wait until the meter archives it
+      if (live && live.active && E.end > Date.now() - durSecs(live.duration) * 1000 - 8000) { LP.deferred.push(E); continue; }
+      const hits = history.filter(h => overlaps(h, E));
+      if (hits.length) {
+        for (const h of hits) {
+          h.segs = [...new Set([...(h.segs || []), E.key])];
+          const merged = mergeBd(LP.all.filter(x => h.segs.includes(x.key)).map(x => x.bd));
+          if (!h.bd || h.bdFromLog || bdTotal(merged) >= bdTotal(h.bd) * 0.9) { h.bd = merged; h.bdFromLog = true; changed = true; }
+        }
+      } else { history.push(encToSnap(E)); changed = true; }
+    }
+    if (changed) { history.sort((a, b) => b.t - a.t); history = history.slice(0, HISTORY_MAX); }
+    return changed;
+  }
+
+  let logDir = null, logDirStored = null, logFH = null, logFileName = '', logOffset = 0, logDecoder = new TextDecoder(), logCarry = '', logBusy = false, logLastScan = 0;
+  const logBtn = $('logBtn'), logStateEl = $('logState');
+  function setLogState(text, kind){ logStateEl.textContent = text; logStateEl.className = 'logstate ' + (kind || ''); }
+  function syncLogBtn(){ logBtn.textContent = logDir ? 'Change log folder' : logDirStored ? 'Reconnect log folder' : 'Connect log folder'; }
+
+  async function readNew(file){
+    if (file.size < logOffset) { logOffset = 0; logCarry = ''; logDecoder = new TextDecoder(); resetLP(); }
+    const total = file.size; let n = 0;
+    while (logOffset < total) {
+      const end = Math.min(total, logOffset + CHUNK);
+      const buf = await file.slice(logOffset, end).arrayBuffer();
+      logOffset = end;
+      const lines = (logCarry + logDecoder.decode(buf, {stream:true})).split('\n');
+      logCarry = lines.pop();
+      for (const ln of lines) processLine(ln);
+      if (total > CHUNK) setLogState(`Reading ${logFileName} · ${Math.round(logOffset / total * 100)}%`, 'wait');
+      if (++n % 2 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  function afterRead(){
+    if (!LP.has260 && LP.enc && Date.now() - LP.lastDmgT > ENC_GAP) finishEnc(LP.lastDmgT);
+    if (!me && LP.selfName) me = LP.selfName;
+    if (reconcile()) {
+      for (const h of history) if (live && h !== live && live.t === h.t) live.bd = h.bd;
+      if (!live && history.length) live = history[0];
+      save(true); renderHist(); render(); renderDetail(); renderGraph(false);
+    }
+    const n = LP.all.length;
+    setLogState(`${logFileName} · ${n} fight${n === 1 ? '' : 's'} read`);
+  }
+  async function pollLog(){
+    if (!logDir || logBusy || demoTimer) return;
+    logBusy = true;
+    try {
+      if (!logFH || Date.now() - logLastScan > 15000) {
+        logLastScan = Date.now();
+        let best = null;
+        for await (const [name, h] of logDir.entries()) {
+          if (h.kind !== 'file' || !/\.log$/i.test(name)) continue;
+          const f = await h.getFile();
+          if (!best || f.lastModified > best.mod) best = {name, h, mod:f.lastModified};
+        }
+        if (!best) { setLogState('No .log files in that folder — pick IINACT\'s log folder', 'bad'); return; }
+        if (best.name !== logFileName) { logFH = best.h; logFileName = best.name; logOffset = 0; logCarry = ''; logDecoder = new TextDecoder(); resetLP(); }
+      }
+      await readNew(await logFH.getFile());
+      afterRead();
+    } catch (e) {
+      setLogState('Log folder: ' + (e.message || e.name), 'bad');
+      if (e.name === 'NotAllowedError' || e.name === 'NotFoundError') { logDir = null; syncLogBtn(); }
+    } finally { logBusy = false; }
+  }
+  setInterval(pollLog, 2000);
+
+  // one-time file import (browsers without folder access)
+  const logInput = document.createElement('input');
+  logInput.type = 'file'; logInput.accept = '.log,.txt'; logInput.id = 'logFile'; logInput.hidden = true;
+  document.body.appendChild(logInput);
+  logInput.onchange = async () => {
+    const f = logInput.files[0]; if (!f || logBusy) return;
+    logDir = null; logFH = null; logFileName = f.name; logOffset = 0; logCarry = ''; logDecoder = new TextDecoder(); resetLP();
+    logBusy = true;
+    try { await readNew(f); afterRead(); } catch (e) { setLogState('Could not read file: ' + e.message, 'bad'); } finally { logBusy = false; logInput.value = ''; }
+  };
+
+  // remember the folder between sessions
+  const idb = () => new Promise((res, rej) => { const r = indexedDB.open('parseboard', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const kvGet = async k => { const db = await idb(); return new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); };
+  const kvSet = async (k, v) => { const db = await idb(); return new Promise(res => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); }); };
+
+  function startLog(d){ logDir = d; logFH = null; logFileName = ''; syncLogBtn(); setLogState('Reading log folder…', 'wait'); pollLog(); }
+  async function connectLogFolder(){
+    if (!window.showDirectoryPicker) { logInput.click(); return; }
+    try {
+      if (logDirStored && !logDir) {
+        if ((await logDirStored.requestPermission({mode:'read'})) === 'granted') return startLog(logDirStored);
+      }
+      // opens in the current user's Documents folder (follows OneDrive redirection);
+      // picking Documents itself is fine — the IINACT subfolder is used automatically
+      let d = await window.showDirectoryPicker({mode:'read', startIn:'documents'});
+      if (d.name.toLowerCase() !== 'iinact') { try { d = await d.getDirectoryHandle('IINACT'); } catch {} }
+      logDirStored = d; try { await kvSet('logdir', d); } catch {}
+      startLog(d);
+    } catch (e) { if (e.name !== 'AbortError') setLogState('Could not open folder: ' + e.message, 'bad'); }
+  }
+  logBtn.onclick = connectLogFolder;
+  $('logBtn2').onclick = connectLogFolder;
+  (async () => {
+    try { logDirStored = await kvGet('logdir'); } catch {}
+    if (logDirStored) {
+      try {
+        if ((await logDirStored.queryPermission({mode:'read'})) === 'granted') startLog(logDirStored);
+        else setLogState('Click Reconnect to resume reading your log', 'wait');
+      } catch {}
+    }
+    syncLogBtn();
+  })();
+
+  // ---------- damage graph ----------
+  const gEl = {wrap:$('graph'), title:$('gTitle'), meta:$('gMeta'), modes:$('gModes'), box:$('gBox'), legend:$('gLegend')};
+  let graphKeys = null, graphMode = '15', graphHover = false;
+  const graphOpen = () => !gEl.wrap.hidden;
+  function openGraph(keys){ graphKeys = keys; gEl.wrap.hidden = false; renderGraph(true); }
+  function closeGraph(){ gEl.wrap.hidden = true; graphHover = false; }
+  $('gClose').onclick = closeGraph;
+  gEl.wrap.addEventListener('click', e => { if (e.target === gEl.wrap) closeGraph(); });
+  gEl.modes.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; graphMode = b.dataset.m; renderGraph(true); });
+  $('graphBtn').onclick = () => openGraph(null);
+  $('dGraphBtn').onclick = () => openGraph([detailKey]);
+
+  function smoothSeries(arr, len, mode){
+    const out = new Array(len), w = mode === 'avg' ? 0 : +mode;
+    let run = 0, cum = 0;
+    for (let i = 0; i < len; i++) {
+      const v = arr[i] || 0; cum += v; run += v;
+      if (w && i >= w) run -= arr[i - w] || 0;
+      out[i] = w ? run / Math.min(w, i + 1) : cum / (i + 1);
+    }
+    return out;
+  }
+  const niceMax = v => { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; };
+
+  function renderGraph(force){
+    if (!graphOpen() || (!force && graphHover)) return;
+    [...gEl.modes.children].forEach(b => b.classList.toggle('on', b.dataset.m === graphMode));
+    const s = current();
+    const bd = s ? (s.bd || (selected === 'live' ? bdLive : null)) : null;
+    const tl = bd && bd.tl;
+    const single = !!(graphKeys && graphKeys.length === 1);
+    const rows = s ? s.rows.filter(r => r.job !== 'LB' && (!graphKeys || graphKeys.includes(r.key))) : [];
+    gEl.title.textContent = (single && rows[0] ? displayName(rows[0]) : (s ? s.title : 'Encounter')) + ' · damage over time';
+    const series = rows.map(r => ({r, arr:(tl && (tl.dmg[r.name] || (r.key === 'YOU' && me ? tl.dmg[me] : null))) || []})).filter(x => x.arr.length);
+    if (!tl || !series.length) {
+      gEl.meta.textContent = '';
+      gEl.box.innerHTML = `<div class="dempty">No timeline for this fight.<br>Timelines come from the combat log: fights from now on have one, and connecting the log folder fills in recent ones.</div>`;
+      gEl.legend.innerHTML = '';
+      return;
+    }
+    const len = Math.max(2, ...series.map(x => x.arr.length), Math.ceil(s.secs || durSecs(s.duration)));
+    const seenC = {};
+    series.forEach(x => { x.v = smoothSeries(x.arr, len, graphMode); x.c = jobColor(x.r.job); x.name = displayName(x.r); x.dash = seenC[x.c] ? '7 4' : ''; seenC[x.c] = 1; });
+    const who = single ? rows[0].name : null;
+    const buffs = tl.buffs
+      .filter(b => b.k === 'raid' || (single && b.k === 'self' && (b.s === who || (rows[0].key === 'YOU' && b.s === me))))
+      .map(b => ({...b, a:Math.max(0, b.a), b:Math.min(len - 1, b.b)})).filter(b => b.b > b.a).sort((x, y) => x.a - y.a);
+    const lanes = [];
+    for (const b of buffs) { let i = lanes.findIndex(end => end <= b.a - 1); if (i < 0) { i = lanes.length; lanes.push(0); } lanes[i] = b.b; b.lane = i; }
+
+    const W = Math.max(480, gEl.box.clientWidth), laneH = 16, T = 12 + lanes.length * laneH + (lanes.length ? 8 : 4);
+    const H = Math.round(Math.max(320, Math.min(540, innerHeight * 0.56))), Lm = 62, Rm = 120, Bm = 32;
+    const pw = W - Lm - Rm, ph = H - T - Bm;
+    const ymax = niceMax(Math.max(1, ...series.map(x => Math.max(...x.v))) * 1.05);
+    const X = i => Lm + (i / (len - 1)) * pw, Y = v => T + ph - (v / ymax) * ph;
+    let svg = `<svg class="gsvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+    for (let k = 0; k <= 4; k++) { const v = ymax * k / 4, y = Y(v).toFixed(1); svg += `<line x1="${Lm}" x2="${Lm + pw}" y1="${y}" y2="${y}" class="${k ? 'ggrid' : 'gaxis'}"/><text x="${Lm - 8}" y="${+y + 4}" class="gy">${compact(v)}</text>`; }
+    const step = len > 900 ? 120 : len > 360 ? 60 : len > 150 ? 30 : len > 50 ? 10 : 5;
+    for (let t = 0; t < len; t += step) svg += `<text x="${X(t).toFixed(1)}" y="${T + ph + 20}" class="gx">${mmss(t)}</text>`;
+    for (const k of ['raid', 'self']) {
+      const iv = buffs.filter(b => b.k === k).map(b => [b.a, b.b]).sort((x, y) => x[0] - y[0]), merged = [];
+      for (const v of iv) { const m = merged[merged.length - 1]; if (m && v[0] <= m[1]) m[1] = Math.max(m[1], v[1]); else merged.push([...v]); }
+      for (const [a0, b0] of merged) {
+        const x1 = X(a0).toFixed(1), x2 = X(b0).toFixed(1);
+        svg += `<rect x="${x1}" y="${T}" width="${Math.max(2, x2 - x1)}" height="${ph}" class="gband ${k}"/>
+          <line x1="${x1}" x2="${x1}" y1="${T}" y2="${T + ph}" class="gedge ${k}"/><line x1="${x2}" x2="${x2}" y1="${T}" y2="${T + ph}" class="gedge ${k}"/>`;
+      }
+    }
+    let clip = 0;
+    for (const b of buffs) {
+      const x1 = X(b.a), w = Math.max(2, X(b.b) - x1), cls = b.k === 'raid' ? 'raid' : 'self', ly = 8 + b.lane * laneH;
+      svg += `<g class="glane ${cls}"><clipPath id="gc${++clip}"><rect x="${x1.toFixed(1)}" y="${ly}" width="${w.toFixed(1)}" height="${laneH - 3}"/></clipPath>
+        <rect x="${x1.toFixed(1)}" y="${ly}" width="${w.toFixed(1)}" height="${laneH - 3}" rx="2"/>
+        <text x="${(x1 + 4).toFixed(1)}" y="${ly + 10}" clip-path="url(#gc${clip})">${esc(b.n)}</text></g>`;
+    }
+    const pathOf = v => v.map((y, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(y).toFixed(1)).join('');
+    if (single) svg += `<path d="${pathOf(series[0].v)}L${X(len - 1).toFixed(1)} ${T + ph}L${Lm} ${T + ph}Z" fill="${series[0].c}" fill-opacity=".13" stroke="none"/>`;
+    series.forEach((x, i) => { svg += `<path d="${pathOf(x.v)}" class="gline" data-i="${i}" stroke="${x.c}"${x.dash ? ` stroke-dasharray="${x.dash}"` : ''}/>`; });
+    const labs = series.map((x, i) => ({i, y0:Y(x.v[len - 1]), y:Y(x.v[len - 1])})).sort((a, b) => a.y - b.y);
+    for (let k = 1; k < labs.length; k++) if (labs[k].y - labs[k - 1].y < 15) labs[k].y = labs[k - 1].y + 15;
+    const over = labs.length ? labs[labs.length - 1].y - (T + ph) : 0;
+    if (over > 0) labs.forEach(l => l.y -= over);
+    labs.forEach(l => { const x = series[l.i];
+      svg += `<g class="glab" data-i="${l.i}"><polyline points="${Lm + pw + 3},${l.y0.toFixed(1)} ${Lm + pw + 9},${l.y.toFixed(1)} ${Lm + pw + 12},${l.y.toFixed(1)}" fill="none" stroke="${x.c}" stroke-width="1.5"/><text x="${Lm + pw + 15}" y="${(l.y + 4).toFixed(1)}">${esc(x.name.split(' ')[0])}</text></g>`; });
+    svg += `<line class="gcross" x1="0" x2="0" y1="${T}" y2="${T + ph}" visibility="hidden"/><rect class="ghit" x="${Lm}" y="${T}" width="${pw}" height="${ph}"/></svg>`;
+    gEl.box.innerHTML = svg + '<div class="gtip" hidden></div>';
+
+    const modeTxt = graphMode === 'avg' ? 'Cumulative average DPS' : `Rolling ${graphMode}s DPS`;
+    gEl.meta.textContent = `${modeTxt} · ${mmss(len)}` + (buffs.length ? '' : ' · no buff windows logged');
+    gEl.legend.innerHTML = series.map((x, i) => `<span class="gleg" data-i="${i}"><i style="background:${x.dash ? `repeating-linear-gradient(90deg,${x.c} 0 7px,transparent 7px 10px)` : x.c}"></i>${esc(x.name)} <b>${fmt(x.r.dps)} DPS</b></span>`).join('')
+      + (buffs.some(b => b.k === 'raid') ? '<span class="gleg"><i class="raidk"></i>Raid buff</span>' : '')
+      + (buffs.some(b => b.k === 'self') ? '<span class="gleg"><i class="selfk"></i>Personal buff</span>' : '');
+
+    const svgEl = gEl.box.querySelector('svg'), hit = svgEl.querySelector('.ghit'), cross = svgEl.querySelector('.gcross'), tip = gEl.box.querySelector('.gtip');
+    const focus = i => { svgEl.classList.toggle('focus', i != null); svgEl.querySelectorAll('[data-i]').forEach(el => el.classList.toggle('on', +el.dataset.i === i)); };
+    hit.onmouseenter = () => { graphHover = true; };
+    hit.onmousemove = e => {
+      const mx = e.clientX - svgEl.getBoundingClientRect().left;
+      const i = Math.max(0, Math.min(len - 1, Math.round((mx - Lm) / pw * (len - 1))));
+      const xi = X(i);
+      cross.setAttribute('x1', xi); cross.setAttribute('x2', xi); cross.setAttribute('visibility', 'visible');
+      const act = [...new Set(buffs.filter(b => b.a <= i && b.b >= i).map(b => b.n))];
+      tip.innerHTML = `<div class="gtt">${mmss(i)}${act.length ? ' · <span>' + esc(act.join(', ')) + '</span>' : ''}</div>`
+        + series.map(x => ({x, v:x.v[i]})).sort((a, b) => b.v - a.v)
+          .map(o => `<div class="gtr"><i style="background:${o.x.c}"></i><span>${esc(o.x.name)}</span><b>${fmt(o.v)}</b></div>`).join('');
+      tip.hidden = false;
+      const tw = tip.offsetWidth;
+      tip.style.left = (xi + 14 + tw > W ? xi - 14 - tw : xi + 14) + 'px';
+      tip.style.top = (T + 4) + 'px';
+    };
+    hit.onmouseleave = () => { graphHover = false; cross.setAttribute('visibility', 'hidden'); tip.hidden = true; };
+    gEl.legend.querySelectorAll('.gleg[data-i]').forEach(el => { el.onmouseenter = () => focus(+el.dataset.i); el.onmouseleave = () => focus(null); });
+  }
+
+  // ---------- websocket ----------
+  let ws, retry = 1000;
+  function setStatus(kind, text){
+    connState = kind;
+    el.status.className = 'status ' + kind;
+    el.status.querySelector('span').textContent = text;
+    const url = `<code>${esc(WS_URL)}</code>`;
+    emptyMsg.innerHTML =
+      kind === 'ok'
+        ? `Connected to IINACT at ${url}.<br>IINACT only sends data while a fight is updating, so this fills in on your next pull. Fights are remembered across reloads from now on.`
+        : `Can't reach IINACT at ${url}.<br>Make sure IINACT is running with its WebSocket server enabled on that port. If you're viewing this inside the Claude app, open the file in Edge or Chrome instead.`;
+  }
+  function connect(){
+    if (demoTimer) return;
+    setStatus('wait', 'Connecting to ' + WS_URL);
+    try { ws = new WebSocket(WS_URL); } catch (e) { return reconnect(); }
+    ws.onopen = () => {
+      retry = 1000;
+      setStatus('ok', 'Connected to IINACT');
+      ws.send(JSON.stringify({call:'subscribe', events:['CombatData','ChangePrimaryPlayer','LogLine']}));
+    };
+    ws.onmessage = e => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      msgCount++;
+      if (m.type) setStatus('ok', `Connected to IINACT · ${msgCount} updates · last: ${m.type}`);
+      handle(m);
+    };
+    ws.onclose = () => { if (!demoTimer) { setStatus('bad', 'Disconnected — retrying'); reconnect(); } };
+    ws.onerror = () => { try { ws.close(); } catch {} };
+  }
+  function reconnect(){ setTimeout(connect, retry); retry = Math.min(retry * 1.6, 10000); }
+
+  // ---------- demo ----------
+  function startDemo(){
+    if (demoTimer) return;
+    if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
+    setStatus('wait', 'Demo data — reload to reconnect');
+    handle({type:'ChangePrimaryPlayer', charName:'Rin Aldane'});
+    const party = [
+      ['Kael Ironhart','GNB',14100,'Gnashing Fang'], ['Mira Solenne','DRK',13900,'Disesteem'],
+      ['YOU','VPR',27800,'Ouroboros'], ['Theo Ashgrove','SAM',29100,'Midare Setsugekka'],
+      ['Lys Everdawn','PCT',29700,'Star Prism'], ['Nova Quill','DNC',21600,'Starfall Dance'],
+      ['Ser Odric','WHM',9300,'Glare IV'], ['Ilya Brightwater','SGE',8800,'Pneuma']
+    ];
+    const healer = j => j === 'WHM' || j === 'SGE', tank = j => j === 'GNB' || j === 'DRK';
+    const KIT = {
+      GNB:[['Gnashing Fang',3],['Double Down',3],['Burst Strike',2],['Solid Barrel',2],['Sonic Break',1.5],['Keen Edge',1.2],['Blasting Zone',1.8]],
+      DRK:[['Disesteem',3],['Edge of Shadow',2.5],['Bloodspiller',2.5],['Souleater',2],['Shadowbringer',2],['Hard Slash',1.2],['Salted Earth',1]],
+      VPR:[['Ouroboros',3],['Reawaken',2.5],['Hunter\'s Coil',2.2],['Swiftskin\'s Sting',2],['Twinfang Bite',1.5],['Steel Fangs',1.2],['Uncoiled Fury',1.6]],
+      SAM:[['Midare Setsugekka',3.2],['Ogi Namikiri',3],['Hissatsu: Shinten',2],['Gekko',1.8],['Kasha',1.8],['Hakaze',1.1]],
+      PCT:[['Star Prism',3.2],['Rainbow Drip',2.4],['Comet in Black',2.6],['Holy in White',2],['Fire in Red',1.4],['Mog of the Ages',2.2],['Hammer Stamp',2]],
+      DNC:[['Starfall Dance',3],['Technical Finish',2.8],['Saber Dance',2.2],['Fan Dance III',1.8],['Fountainfall',1.6],['Cascade',1.1]],
+      WHM:[['Glare IV',2.6],['Glare III',2.2],['Afflatus Misery',3],['Assize',1.6]],
+      SGE:[['Dosis III',2.6],['Phlegma III',2.4],['Pneuma',2.2],['Toxikon II',1.2]]
+    };
+    const HEALKIT = {
+      WHM:[['Afflatus Solace',2],['Cure II',2],['Medica III',1.6],['Assize',1],['Tetragrammaton',1.4]],
+      SGE:[['Druochole',2],['Kerachole',1.4],['Eukrasian Prognosis II',1.6],['Pneuma',1.2],['Physis II',1]]
+    };
+    const pick = kit => { const tot = kit.reduce((x,k)=>x+k[1],0); let r = Math.random()*tot; for (const k of kit) { if ((r -= k[1]) <= 0) return k[0]; } return kit[0][0]; };
+    function demoEvents(p, d, healAmt, s){
+      const who = p[0] === 'YOU' ? (me || 'You') : p[0];
+      if (d > 0) {
+        const n = 1 + (Math.random() < .55 ? 1 : 0);
+        for (let k = 0; k < n; k++) pushEv({n:who, a:pick(KIT[p[1]]), hit:true, d:d/n, c:Math.random()*100 < s.crit, dh:Math.random()*100 < s.dh, h:0, cast:true});
+        if (p[1] === 'SAM' && Math.random() < .5) pushEv({n:who, a:'DoT ticks (est.)', hit:true, d:d*.08, c:false, dh:false, h:0, cast:false});
+      }
+      if (HEALKIT[p[1]] && healAmt > 0) pushEv({n:who, a:pick(HEALKIT[p[1]]), hit:false, d:0, h:healAmt, hc:Math.random() < .2, cast:true});
+    }
+    const LEN = 150;
+    let st, secs, lb, pause = 0;
+    const reset = () => {
+      secs = 0; lb = 0;
+      st = party.map(() => ({dmg:0, heal:0, taken:0, max:0, crit:22+Math.random()*12, dh:28+Math.random()*22, ph:Math.random()*6}));
+    };
+    reset();
+    demoTimer = setInterval(() => {
+      if (pause) { if (--pause === 0) reset(); return; }
+      secs++;
+      const burst = (secs % 120) < 22 ? 1.5 : 1;
+      if (secs % 120 === 1) {
+        [['Technical Finish','Nova Quill','raid',20], ['Starry Muse','Lys Everdawn','raid',20], ['No Mercy','Kael Ironhart','self',20],
+         ['Delirium','Mira Solenne','self',15], ['Meikyo Shisui','Theo Ashgrove','self',20], ['Reawakened', me || 'You','self',15]]
+          .forEach(([name, src, k, dur]) => pushEv({kind:'buff', name, src, k, dur}));
+      }
+      party.forEach((p, i) => {
+        const s = st[i];
+        const dead = p[0] === 'Nova Quill' && secs > 88 && secs < 104;
+        const d = dead ? 0 : p[2] * burst * (0.7 + 0.6*Math.random()) * (1 + .12*Math.sin(secs/9 + s.ph));
+        s.dmg += d; s.max = Math.max(s.max, d * (3 + Math.random()*4));
+        const hAmt = healer(p[1]) ? 6500 + Math.random()*4000 : tank(p[1]) ? 1200 + Math.random()*900 : Math.random()*250;
+        s.heal += hAmt;
+        demoEvents(p, d, healer(p[1]) ? hAmt : 0, s);
+        s.taken += tank(p[1]) ? 9000 + Math.random()*6000 : 900 + Math.random()*900;
+      });
+      if (secs > 60 && secs < 64) lb += 210000;
+      const tot = st.reduce((a,s)=>a+s.dmg,0) + lb, th = st.reduce((a,s)=>a+s.heal,0);
+      const C = {};
+      party.forEach((p, i) => {
+        const s = st[i];
+        C[p[0]] = {
+          name:p[0], Job:p[1][0] + p[1].slice(1).toLowerCase(),
+          encdps:(s.dmg/secs).toFixed(2), damage:String(Math.round(s.dmg)), 'damage%':Math.round(s.dmg/tot*100)+'%',
+          enchps:(s.heal/secs).toFixed(2), healed:String(Math.round(s.heal)), 'healed%':Math.round(s.heal/th*100)+'%',
+          OverHealPct:(healer(p[1]) ? 24 : 41) + '%', damagetaken:String(Math.round(s.taken)),
+          deaths: p[0] === 'Nova Quill' && secs > 88 ? '1' : '0',
+          'crithit%':s.crit.toFixed(0)+'%', DirectHitPct:s.dh.toFixed(0)+'%', CritDirectHitPct:(s.crit*s.dh/100).toFixed(0)+'%',
+          maxhit:`${p[3]}-${Math.round(s.max)}`
+        };
+      });
+      if (lb) C['Limit Break'] = {name:'Limit Break', Job:'', encdps:(lb/secs).toFixed(2), damage:String(lb), maxhit:`Limit Break-${lb}`};
+      const mm = String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
+      const done = secs >= LEN;
+      handle({type:'CombatData', isActive: done ? 'false' : 'true', Combatant:C,
+        Encounter:{title:'Striking Dummy', CurrentZoneName:'Demo · Summerford Farms', duration:mm, DURATION:secs,
+          ENCDPS:(tot/secs).toFixed(2), ENCHPS:(th/secs).toFixed(2), damage:String(Math.round(tot)), deaths: secs > 88 ? '1' : '0'}});
+      if (done) pause = 4;
+    }, 1000);
+  }
+
+  renderHist(); render();
+  if (params.has('demo')) startDemo(); else connect();
+})();
+</script>
+</body>
+</html>
