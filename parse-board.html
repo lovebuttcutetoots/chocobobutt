@@ -677,32 +677,51 @@ kbd{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 5px;border-
     el.deaths.textContent = s.deaths;
   }
 
+  // History bar: a "Live" chip plus a "Previous fights" <select>.
+  // renderHist() runs on every IINACT CombatData message (several per second in combat).
+  // It must NOT recreate these elements each time: replacing a <select> while its
+  // native popup is open closes the popup, which made the dropdown unusable mid-fight.
+  // So the elements are created once and reused; the option list is rebuilt only when
+  // the fight list itself changes (histSig), and if that happens while the dropdown is
+  // focused/open, the rebuild waits until it loses focus.
+  let histLive = null, histSel = null, histSig = '', histDirty = false;
   function renderHist(){
-    el.hist.innerHTML = '';
-    const mk = (label, sub, id) => {
-      const b = document.createElement('button');
-      b.className = 'chip' + (selected === id ? ' on' : '');
-      b.innerHTML = `<span>${esc(label)}</span>${sub ? `<em>${esc(sub)}</em>` : ''}`;
-      b.onclick = () => select(id);
-      el.hist.appendChild(b);
-    };
-    if (!history.length) return;
-    mk('Live', '', 'live');
-    const sel = document.createElement('select');
-    sel.className = 'hsel' + (selected !== 'live' ? ' on' : '');
-    sel.title = 'Previous fights';
-    const ph = document.createElement('option');
-    ph.value = ''; ph.textContent = `Previous fights (${history.length})`;
-    sel.appendChild(ph);
-    [...history].sort((a, b) => b.t - a.t).forEach(h => {
-      const o = document.createElement('option');
-      o.value = String(h.t);
-      o.textContent = `${h.title} — ${h.duration}${h.recovered ? ' · log' : ''}`;
-      sel.appendChild(o);
-    });
-    sel.value = selected === 'live' ? '' : String(selected);
-    sel.onchange = () => { const h = history.find(x => String(x.t) === sel.value); select(h ? h.t : 'live'); };
-    el.hist.appendChild(sel);
+    if (!history.length) {                       // nothing archived yet: hide the bar
+      if (histLive) { el.hist.innerHTML = ''; histLive = histSel = null; histSig = ''; }
+      return;
+    }
+    if (!histLive) {
+      histLive = document.createElement('button');
+      histLive.innerHTML = '<span>Live</span>';
+      histLive.onclick = () => select('live');
+      histSel = document.createElement('select');
+      histSel.title = 'Previous fights';
+      histSel.onchange = () => { const h = history.find(x => String(x.t) === histSel.value); select(h ? h.t : 'live'); };
+      // a rebuild skipped while the dropdown was open is applied once it closes
+      histSel.onblur = () => { if (histDirty) renderHist(); };
+      el.hist.append(histLive, histSel);
+    }
+    histLive.className = 'chip' + (selected === 'live' ? ' on' : '');
+    histSel.className = 'hsel' + (selected !== 'live' ? ' on' : '');
+
+    const open = document.activeElement === histSel;
+    const list = [...history].sort((a, b) => b.t - a.t);
+    const sig = list.map(h => `${h.t}|${h.title}|${h.duration}|${h.recovered ? 1 : 0}`).join('\n');
+    if (sig !== histSig) {
+      if (open) { histDirty = true; return; }   // don't touch options under an open popup
+      histSig = sig; histDirty = false;
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = `Previous fights (${list.length})`;
+      const opts = list.map(h => {
+        const o = document.createElement('option');
+        o.value = String(h.t);
+        o.textContent = `${h.title} — ${h.duration}${h.recovered ? ' · log' : ''}`;
+        return o;
+      });
+      histSel.replaceChildren(ph, ...opts);
+    }
+    const want = selected === 'live' ? '' : String(selected);
+    if (!open && histSel.value !== want) histSel.value = want;
   }
   function select(id){ selected = id; renderHist(); render(); renderDetail(); renderGraph(true); }
 
