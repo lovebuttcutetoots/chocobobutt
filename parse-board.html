@@ -76,7 +76,13 @@ h1{font-family:Cinzel,serif;font-size:34px;font-weight:700;letter-spacing:.02em;
 .tabs button{all:unset;cursor:pointer;padding:7px 18px;border-radius:6px;font-family:Cinzel,serif;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--dim);transition:background .2s,color .2s}
 .tabs button:hover{color:#fff}
 .tabs button.on{background:var(--win-bg-hi);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),inset 0 0 0 2px rgba(0,0,30,.5)}
-.hist{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;justify-content:flex-end;min-width:0;padding:2px}
+.hist{display:flex;gap:6px;align-items:center;justify-content:flex-end;min-width:0;padding:2px}
+.hsel{appearance:none;-webkit-appearance:none;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--dim);max-width:280px;min-width:0;text-overflow:ellipsis;
+  padding:6px 30px 6px 12px;border-radius:9px;border:2px solid rgba(200,210,235,.25);
+  background:rgba(10,25,80,.5) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c3cdee'/%3E%3C/svg%3E") no-repeat right 11px center;transition:.2s}
+.hsel:hover{color:#fff;border-color:rgba(220,228,245,.5)}
+.hsel.on{color:#fff;border-color:rgba(220,228,245,.6)}
+.hsel option{background:#0d1f5c;color:#fff}
 .hist::-webkit-scrollbar{display:none}
 .chip{all:unset;cursor:pointer;flex:none;display:flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--dim);border:2px solid rgba(200,210,235,.25);background:rgba(10,25,80,.5);transition:.2s;max-width:240px}
 .chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -680,8 +686,23 @@ kbd{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 5px;border-
       b.onclick = () => select(id);
       el.hist.appendChild(b);
     };
-    if (history.length) mk('Live', '', 'live');
-    history.forEach(h => mk(h.title, h.duration + (h.recovered ? ' · log' : ''), h.t));
+    if (!history.length) return;
+    mk('Live', '', 'live');
+    const sel = document.createElement('select');
+    sel.className = 'hsel' + (selected !== 'live' ? ' on' : '');
+    sel.title = 'Previous fights';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = `Previous fights (${history.length})`;
+    sel.appendChild(ph);
+    [...history].sort((a, b) => b.t - a.t).forEach(h => {
+      const o = document.createElement('option');
+      o.value = String(h.t);
+      o.textContent = `${h.title} — ${h.duration}${h.recovered ? ' · log' : ''}`;
+      sel.appendChild(o);
+    });
+    sel.value = selected === 'live' ? '' : String(selected);
+    sel.onchange = () => { const h = history.find(x => String(x.t) === sel.value); select(h ? h.t : 'live'); };
+    el.hist.appendChild(sel);
   }
   function select(id){ selected = id; renderHist(); render(); renderDetail(); renderGraph(true); }
 
