@@ -82,7 +82,18 @@ h1{font-family:Cinzel,serif;font-size:34px;font-weight:700;letter-spacing:.02em;
   background:rgba(10,25,80,.5) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c3cdee'/%3E%3C/svg%3E") no-repeat right 11px center;transition:.2s}
 .hsel:hover{color:#fff;border-color:rgba(220,228,245,.5)}
 .hsel.on{color:#fff;border-color:rgba(220,228,245,.6)}
-.hsel option{background:#0d1f5c;color:#fff}
+/* history dropdown: custom list (not a native <select>, see renderHist) */
+.hdd{position:relative;min-width:0;display:flex}
+button.hsel{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-align:left;line-height:normal;box-sizing:border-box}
+.hsel:focus-visible{outline:none;border-color:#fff;box-shadow:0 0 0 2px rgba(143,210,255,.3)}
+.hlist{position:absolute;right:0;top:calc(100% + 4px);z-index:15;min-width:100%;max-width:360px;max-height:60vh;overflow-y:auto;box-sizing:border-box;
+  padding:4px;border-radius:9px;border:2px solid rgba(220,228,245,.5);background:#0d1f5c;box-shadow:0 8px 24px rgba(0,0,20,.6);
+  scrollbar-width:thin;scrollbar-color:#3a4f94 transparent}
+.hlist[hidden]{display:none}
+.hopt{padding:6px 10px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--dim)}
+.hopt.on{color:#fff}
+.hopt.hi{background:var(--win-bg-hi);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+@media (max-width:900px){.hlist{left:0;right:auto}}
 .hist::-webkit-scrollbar{display:none}
 .chip{all:unset;cursor:pointer;flex:none;display:flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--dim);border:2px solid rgba(200,210,235,.25);background:rgba(10,25,80,.5);transition:.2s;max-width:240px}
 .chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -677,52 +688,123 @@ kbd{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 5px;border-
     el.deaths.textContent = s.deaths;
   }
 
-  // History bar: a "Live" chip plus a "Previous fights" <select>.
-  // renderHist() runs on every IINACT CombatData message (several per second in combat).
-  // It must NOT recreate these elements each time: replacing a <select> while its
-  // native popup is open closes the popup, which made the dropdown unusable mid-fight.
-  // So the elements are created once and reused; the option list is rebuilt only when
-  // the fight list itself changes (histSig), and if that happens while the dropdown is
-  // focused/open, the rebuild waits until it loses focus.
-  let histLive = null, histSel = null, histSig = '', histDirty = false;
+  // History bar: a "Live" chip plus a "Previous fights" dropdown.
+  // renderHist() runs on every IINACT CombatData message (several per second in combat),
+  // so it must be cheap and must not disturb the dropdown while the user is in it.
+  //
+  // Why the dropdown is custom and not a native <select>:
+  //  - PR #1: replacing the <select> each update closed its popup mid-fight.
+  //  - Even when reused, Chrome re-syncs an open native popup whenever the <select>'s
+  //    style is recalculated, which the constant updates trigger, and every re-sync
+  //    snaps the highlight back to the selected (first) entry instead of the item
+  //    under the mouse. A page can't control a native popup's highlight, so the list
+  //    is our own element and the highlight is ours (histHi), changed only by the
+  //    mouse or the arrow keys.
+  //
+  // Elements are created once and reused. The option list is rebuilt only when the
+  // fight list changes (histSig); if that happens while the list is open, the rebuild
+  // waits until it closes (histDirty), so entries never shift under the cursor and a
+  // click always picks the fight that was highlighted.
+  let histLive = null, histWrap = null, histBtn = null, histList = null;
+  let histSig = '', histDirty = false, histOpen = false, histHi = -1, histItems = [];
   function renderHist(){
     if (!history.length) {                       // nothing archived yet: hide the bar
-      if (histLive) { el.hist.innerHTML = ''; histLive = histSel = null; histSig = ''; }
+      if (histLive) { el.hist.innerHTML = ''; histLive = histWrap = histBtn = histList = null; histSig = ''; histOpen = false; histItems = []; }
       return;
     }
     if (!histLive) {
       histLive = document.createElement('button');
       histLive.innerHTML = '<span>Live</span>';
       histLive.onclick = () => select('live');
-      histSel = document.createElement('select');
-      histSel.title = 'Previous fights';
-      histSel.onchange = () => { const h = history.find(x => String(x.t) === histSel.value); select(h ? h.t : 'live'); };
-      // a rebuild skipped while the dropdown was open is applied once it closes
-      histSel.onblur = () => { if (histDirty) renderHist(); };
-      el.hist.append(histLive, histSel);
+      histWrap = document.createElement('div');
+      histWrap.className = 'hdd';
+      histBtn = document.createElement('button');
+      histBtn.title = 'Previous fights';
+      histBtn.setAttribute('aria-haspopup', 'listbox');
+      histBtn.setAttribute('aria-expanded', 'false');
+      histBtn.onclick = () => histOpen ? closeHist() : openHist();
+      histBtn.onkeydown = histKey;
+      histList = document.createElement('div');
+      histList.className = 'hlist';
+      histList.setAttribute('role', 'listbox');
+      histList.hidden = true;
+      // one delegated handler each: highlight follows the real mouse position, click picks
+      histList.onmousemove = e => { const o = e.target.closest('.hopt'); if (o) setHistHi(+o.dataset.i, false); };
+      histList.onclick = e => { const o = e.target.closest('.hopt'); if (o) pickHist(+o.dataset.i); };
+      histWrap.append(histBtn, histList);
+      el.hist.append(histLive, histWrap);
     }
-    histLive.className = 'chip' + (selected === 'live' ? ' on' : '');
-    histSel.className = 'hsel' + (selected !== 'live' ? ' on' : '');
+    histLive.classList.toggle('chip', true);
+    histLive.classList.toggle('on', selected === 'live');
+    histBtn.classList.toggle('hsel', true);
+    histBtn.classList.toggle('on', selected !== 'live');
 
-    const open = document.activeElement === histSel;
-    const list = [...history].sort((a, b) => b.t - a.t);
-    const sig = list.map(h => `${h.t}|${h.title}|${h.duration}|${h.recovered ? 1 : 0}`).join('\n');
+    const list = histSorted(), sig = histSigOf(list);
     if (sig !== histSig) {
-      if (open) { histDirty = true; return; }   // don't touch options under an open popup
-      histSig = sig; histDirty = false;
-      const ph = document.createElement('option');
-      ph.value = ''; ph.textContent = `Previous fights (${list.length})`;
-      const opts = list.map(h => {
-        const o = document.createElement('option');
-        o.value = String(h.t);
-        o.textContent = `${h.title} — ${h.duration}${h.recovered ? ' · log' : ''}`;
-        return o;
-      });
-      histSel.replaceChildren(ph, ...opts);
+      if (histOpen) histDirty = true;            // don't touch the list while it's open
+      else buildHist(list, sig);
     }
-    const want = selected === 'live' ? '' : String(selected);
-    if (!open && histSel.value !== want) histSel.value = want;
+    // button label: the picked fight, or the count when on Live
+    const cur = selected !== 'live' && histItems.find(h => h.t === selected);
+    const label = cur ? histText(cur) : `Previous fights (${list.length})`;
+    if (histBtn.textContent !== label) histBtn.textContent = label;
   }
+  const histSorted = () => [...history].sort((a, b) => b.t - a.t);
+  const histSigOf = list => list.map(h => `${h.t}|${h.title}|${h.duration}|${h.recovered ? 1 : 0}`).join('\n');
+  const histText = h => `${h.title} — ${h.duration}${h.recovered ? ' · log' : ''}`;
+  function buildHist(list, sig){
+    histSig = sig; histDirty = false; histItems = list;
+    histList.replaceChildren(...list.map((h, i) => {
+      const o = document.createElement('div');
+      o.className = 'hopt' + (h.t === selected ? ' on' : '');
+      o.setAttribute('role', 'option');
+      o.dataset.i = i;
+      o.textContent = histText(h);
+      o.title = o.textContent;
+      return o;
+    }));
+  }
+  function setHistHi(i, scroll){
+    if (i === histHi) return;
+    const opts = histList.children;
+    if (opts[histHi]) opts[histHi].classList.remove('hi');
+    histHi = i;
+    if (opts[i]) { opts[i].classList.add('hi'); if (scroll) opts[i].scrollIntoView({block:'nearest'}); }
+  }
+  function openHist(){
+    const list = histSorted();
+    buildHist(list, histSigOf(list));            // fresh list (and current-fight mark) on every open
+    histOpen = true; histList.hidden = false; histBtn.setAttribute('aria-expanded', 'true');
+    histHi = -1;
+    const cur = histItems.findIndex(h => h.t === selected);
+    setHistHi(cur >= 0 ? cur : 0, true);
+  }
+  function closeHist(){
+    if (!histOpen) return;
+    histOpen = false; histList.hidden = true; histBtn.setAttribute('aria-expanded', 'false');
+    if (histDirty) renderHist();                 // apply a rebuild skipped while open
+  }
+  function pickHist(i){
+    const h = histItems[i];
+    closeHist();
+    if (h) select(h.t);
+  }
+  // keyboard on the dropdown button: arrows move, Enter/Space pick, Esc/Tab close
+  function histKey(e){
+    const n = histItems.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); e.stopPropagation();
+      if (!histOpen) { openHist(); return; }
+      const d = e.key === 'ArrowDown' ? 1 : -1;
+      setHistHi(Math.max(0, Math.min(n - 1, histHi + d)), true);
+    } else if (histOpen && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault(); e.stopPropagation(); pickHist(histHi);
+    } else if (histOpen && e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation(); closeHist();
+    } else if (e.key === 'Tab') closeHist();
+  }
+  // click anywhere outside the dropdown closes it
+  addEventListener('mousedown', e => { if (histOpen && !histWrap.contains(e.target)) closeHist(); });
   function select(id){ selected = id; renderHist(); render(); renderDetail(); renderGraph(true); }
 
   // smooth number tweening
@@ -755,6 +837,7 @@ kbd{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 5px;border-
   }
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
+    if (histOpen && e.key === 'Escape') { closeHist(); return; }
     if (graphOpen()) { if (e.key === 'Escape') closeGraph(); return; }
     if (detailKey && e.key !== 'Escape') return;
     if (e.key === '1') setView('dps');
